@@ -182,3 +182,8 @@ dist
 # End of https://www.toptal.com/developers/gitignore/api/node,macos
 
 __temp__
+
+TemplateKotlin.md
+DOCUMENTACAO_RUNNERS_E_ROADMAP.md
+adapter-pipeline/output
+src/runners/pilot*/

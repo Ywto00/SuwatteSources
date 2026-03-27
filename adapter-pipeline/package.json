@@ -1,0 +1,19 @@
+{
+  "name": "adapter-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local pipeline to import, translate and serve Tachi/Mihon sources as runner-ready repository",
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "pilot:select": "node scripts/select-pilots.mjs",
+    "pilot:generate": "node scripts/generate-pilot-runners.mjs",
+    "catalog": "node scripts/build-catalog.mjs",
+    "export:stt": "node scripts/export-stt.mjs",
+    "serve": "node scripts/serve.mjs",
+    "clean": "node scripts/clean.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

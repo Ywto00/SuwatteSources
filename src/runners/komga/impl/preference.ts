@@ -7,13 +7,15 @@ export const KomgaPreferenceProvider: RunnerPreferenceProvider = {
       sections: [
         {
           header: "Core",
+          footer:
+            "Recommended ON: each Komga series opens as one title and books are treated as chapters.",
           children: [
             UIToggle({
-              id: "syncChaptersMarked",
-              title: "Sync Chapters Marked",
-              value: await KomgaStore.syncChaptersMarked(),
+              id: "openAsTitle",
+              title: "Treat Books as Chapters",
+              value: await KomgaStore.openSeriesAsTitle(),
               async didChange(value) {
-                await ObjectStore.set("syncChaptersMarked", value);
+                await ObjectStore.set("openAsTitle", value);
               },
             }),
           ],

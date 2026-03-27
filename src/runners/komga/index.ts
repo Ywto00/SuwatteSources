@@ -23,9 +23,9 @@ type Komga = ContentSource;
 
 // Info
 const info: RunnerInfo = {
-  id: "org.komga",
-  name: "Komga",
-  version: 1.19,
+  id: "org.komga.plus",
+  name: "Komga Plus",
+  version: 1.0,
   minSupportedAppVersion: "6.0.0",
   thumbnail: "komga.png",
   website: "https://komga.org",
@@ -36,13 +36,13 @@ const info: RunnerInfo = {
 // Config
 const config: SourceConfig = {
   disableChapterDataCaching: true, // Refetch image list each time
-  // disableLibraryActions: false,
-  // disableContentLinking: false,
-  // disableMigrationDestination: false,
-  // disableUpdateChecks: false,
+  disableLibraryActions: false,
+  disableContentLinking: true,
   disableCustomThumbnails: true,
   disableLanguageFlags: true,
-  disableTrackerLinking: true,
+  disableMigrationDestination: true,
+  disableTrackerLinking: false,
+  disableUpdateChecks: true,
   allowsMultipleInstances: true,
   requiresAuthenticationToAccessContent: true,
 };

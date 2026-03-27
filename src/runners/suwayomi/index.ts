@@ -23,7 +23,7 @@ type Suwayomi = ContentSource;
 const info: RunnerInfo = {
   id: "org.suwayomi",
   name: "Suwayomi",
-  version: 1.6,
+  version: 2.0,
   minSupportedAppVersion: "6.0.0",
   thumbnail: "suwayomi.png",
   website: "https://github.com/Suwayomi",
@@ -40,7 +40,7 @@ const config: SourceConfig = {
   // disableUpdateChecks: false,
   disableCustomThumbnails: true,
   disableLanguageFlags: true,
-  disableTrackerLinking: true,
+  disableTrackerLinking: false,
   allowsMultipleInstances: true,
   requiresAuthenticationToAccessContent: false, // Authentication is optional and configurable
 };

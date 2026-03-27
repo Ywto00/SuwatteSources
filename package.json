@@ -7,18 +7,33 @@
     "test": "jest",
     "prep": "rm -rf ./dist && tsc",
     "dev": "nodemon",
-    "build": "daisuke build",
+    "build": "node scripts/build-safe.mjs",
     "serve": "daisuke serve",
-    "lint": "eslint"
+    "lint": "eslint",
+    "adapter:sync": "npm --prefix ./adapter-pipeline run sync",
+    "adapter:pilot:select": "npm --prefix ./adapter-pipeline run pilot:select",
+    "adapter:pilot:generate": "npm --prefix ./adapter-pipeline run pilot:generate",
+    "adapter:catalog": "npm --prefix ./adapter-pipeline run catalog",
+    "adapter:export": "npm --prefix ./adapter-pipeline run export:stt",
+    "adapter:serve": "npm --prefix ./adapter-pipeline run serve",
+    "adapter:clean": "npm --prefix ./adapter-pipeline run clean",
+    "adapter:prepare": "node -e \"console.log('[adapter] 1/4 clean')\" && npm run adapter:clean && node -e \"console.log('[adapter] 2/4 sync')\" && npm run adapter:sync && node -e \"console.log('[adapter] 3/4 select pilots (max 3)')\" && npm run adapter:pilot:select && node -e \"console.log('[adapter] 4/4 generate pilots')\" && npm run adapter:pilot:generate",
+    "adapter:postbuild": "npm run adapter:catalog && npm run adapter:export",
+    "adapter:all": "npm run adapter:clean && npm run adapter:sync && npm run adapter:pilot:select && npm run adapter:pilot:generate && npm run adapter:catalog && npm run adapter:export",
+    "publish:all": "npm run adapter:prepare && node -e \"console.log('[adapter] compiling .stt with daisuke build')\" && pnpm run build && node -e \"console.log('[adapter] exporting experimental pages')\" && npm run adapter:postbuild"
   },
   "private": true,
   "keywords": [
     "suwatte"
   ],
   "author": {
+<<<<<<< HEAD
     "name": "everpcpc",
     "email": "suwatte@everpcpc.com",
     "url": "https://everpcpc.com"
+=======
+    "name": "ywt000"
+>>>>>>> 644fca8 (feat(Komga,Suwayomi):add tracking and save to library)
   },
   "license": "MIT",
   "devDependencies": {
@@ -50,7 +65,11 @@
     "seedrandom": "^3.0.5"
   },
   "stt": {
+<<<<<<< HEAD
     "listName": "everpcpc's List"
+=======
+    "listName": "ywt00's List"
+>>>>>>> 644fca8 (feat(Komga,Suwayomi):add tracking and save to library)
   },
   "packageManager": "pnpm@10.18.2+sha512.9fb969fa749b3ade6035e0f109f0b8a60b5d08a1a87fdf72e337da90dcc93336e2280ca4e44f2358a649b83c17959e9993e777c2080879f3801e6f0d999ad3dd"
 }

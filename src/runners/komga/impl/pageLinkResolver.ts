@@ -8,21 +8,19 @@ import {
   SectionStyle,
 } from "@suwatte/daisuke";
 import {
-  getBooksForLibrary,
-  getBooksOnDeck,
+  getSeriesForLibrary,
   getSeriesForLibraryWithState,
 } from "../api/library";
 import { ReadStatus, Sort, buildSort, seriesToTile } from "../utils";
 import { getHost } from "../api";
+import { KomgaStore } from "../store";
 
 export const KomgaPageLinkResolver: PageLinkResolver = {
   getSectionsForPage: async function (link: PageLink): Promise<PageSection[]> {
     switch (link.id) {
       case "all":
       case "library": {
-        const libraryId =
-          (link.context?.libraryId as string | undefined) ?? null;
-        return buildBrowseLibrarySections(libraryId);
+        return buildBrowseLibrarySections();
       }
     }
 
@@ -46,41 +44,20 @@ export const KomgaPageLinkResolver: PageLinkResolver = {
 };
 
 // Library Sections
-async function buildBrowseLibrarySections(libraryId: string | null) {
+function buildBrowseLibrarySections() {
   const sections: PageSection[] = [];
 
   sections.push({
     id: "search_directory",
-    title: "Search Komga",
+    title: "Browse Library",
     style: SectionStyle.TAG,
   });
 
-  // Check if keep_reading has content before adding
-  const keepReadingItems = await getBooksForLibrary(
-    libraryId,
-    buildSort(Sort.ReadDate, false),
-    { read_status: [ReadStatus.InProgress] }
-  );
-  if (keepReadingItems.length > 0) {
-    sections.push({
-      id: "keep_reading",
-      title: "Keep Reading",
-    });
-  }
-
-  // Check if on_deck has content before adding
-  const onDeckItems = await getBooksOnDeck(libraryId);
-  if (onDeckItems.length > 0) {
-    sections.push({
-      id: "on_deck",
-      title: "On Deck",
-    });
-  }
-
   sections.push({
-    id: "recently_added_books",
-    title: "Recently Added Books",
+    id: "keep_reading",
+    title: "Keep Reading",
   });
+
   sections.push({
     id: "recently_added_series",
     title: "Recently Added Series",
@@ -101,13 +78,30 @@ async function resolveLibrarySection(
   let items: Highlight[] = [];
 
   const convertSeriesToItems = async (key: "new" | "updated") => {
+    const openAsTitle = await KomgaStore.openSeriesAsTitle();
+
     const series = await getSeriesForLibraryWithState(libraryId, key);
 
     const host = await getHost();
     const highlights: Highlight[] = (series ?? []).map((data) =>
-      seriesToTile(data, host)
+      seriesToTile(data, host, !openAsTitle)
     );
     return highlights;
+  };
+
+  const convertSeriesDirectory = async (
+    sort: Sort,
+    filters: Record<string, string[]> = {}
+  ) => {
+    const openAsTitle = await KomgaStore.openSeriesAsTitle();
+    const host = await getHost();
+    const series = await getSeriesForLibrary(
+      libraryId,
+      buildSort(sort, false),
+      filters,
+      1
+    );
+    return (series ?? []).map((data) => seriesToTile(data, host, !openAsTitle));
   };
 
   switch (sectionKey) {
@@ -132,26 +126,9 @@ async function resolveLibrarySection(
       break;
     }
     case "keep_reading": {
-      const highlights = await getBooksForLibrary(
-        libraryId,
-        buildSort(Sort.ReadDate, false),
-        { read_status: [ReadStatus.InProgress] }
-      );
-      items = highlights;
-      break;
-    }
-    case "on_deck": {
-      const highlights = await getBooksOnDeck(libraryId);
-      items = highlights;
-      break;
-    }
-    case "recently_added_books": {
-      const highlights = await getBooksForLibrary(
-        libraryId,
-        buildSort(Sort.DateAdded, false),
-        {}
-      );
-      items = highlights;
+      items = await convertSeriesDirectory(Sort.ReadDate, {
+        read_status: [ReadStatus.InProgress],
+      });
       break;
     }
     case "recently_added_series": {

@@ -119,6 +119,16 @@ export const getManga = async (id: number): Promise<MangaType> => {
           name
           displayName
         }
+        trackRecords {
+          nodes {
+            remoteId
+            remoteUrl
+            tracker {
+              id
+              name
+            }
+          }
+        }
       }
     }
   `;

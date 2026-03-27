@@ -127,6 +127,8 @@ export const mangaToContent = async (manga: MangaType): Promise<Content> => {
     tags: tags,
   });
 
+  const trackerInfo = toTrackerInfo(manga);
+
   return {
     title: manga.title,
     creators,
@@ -136,7 +138,77 @@ export const mangaToContent = async (manga: MangaType): Promise<Content> => {
     properties,
     summary: manga.description,
     recommendedPanelMode: ReadingMode.PAGED_MANGA,
+    trackerInfo,
   };
+};
+
+type TrackerRecordNode = {
+  remoteId?: string;
+  remoteUrl?: string;
+  tracker?: {
+    id?: number;
+    name?: string;
+  };
+};
+
+const TRACKER_NAME_ALIASES: Record<string, string> = {
+  anilist: "anilist",
+  myanimelist: "mal",
+  mangaupdates: "mangaupdates",
+  kitsu: "kitsu",
+  simkl: "simkl",
+  bangumi: "bangumi",
+};
+
+const normalizeTrackerKey = (value?: string): string | undefined => {
+  if (!value) return undefined;
+  const key = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return TRACKER_NAME_ALIASES[key];
+};
+
+const inferTrackerKeyFromUrl = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  const normalized = url.toLowerCase();
+  if (normalized.includes("anilist.co")) return "anilist";
+  if (normalized.includes("myanimelist.net")) return "mal";
+  if (normalized.includes("mangaupdates.com")) return "mangaupdates";
+  if (normalized.includes("kitsu.io")) return "kitsu";
+  if (normalized.includes("simkl.com")) return "simkl";
+  if (normalized.includes("bgm.tv") || normalized.includes("bangumi.tv")) {
+    return "bangumi";
+  }
+  return undefined;
+};
+
+const toTrackerInfo = (
+  manga: MangaType
+): Record<string, string> | undefined => {
+  const nodes = manga.trackRecords?.nodes as TrackerRecordNode[] | undefined;
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    return undefined;
+  }
+
+  const trackerInfo: Record<string, string> = {};
+
+  for (const node of nodes) {
+    const key =
+      normalizeTrackerKey(node.tracker?.name) ??
+      inferTrackerKeyFromUrl(node.remoteUrl);
+    if (!key) continue;
+
+    const remoteId = node.remoteId?.toString().trim();
+    if (remoteId) {
+      trackerInfo[key] = remoteId;
+      continue;
+    }
+
+    const remoteUrl = node.remoteUrl?.toString().trim();
+    if (remoteUrl) {
+      trackerInfo[key] = remoteUrl;
+    }
+  }
+
+  return Object.keys(trackerInfo).length > 0 ? trackerInfo : undefined;
 };
 
 const convertStatus = (val: MangaStatus): PublicationStatus | undefined => {

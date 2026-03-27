@@ -1,7 +1,6 @@
 import { ChapterEventHandler } from "@suwatte/daisuke";
 import { request } from "../api";
 import { genURL } from "../utils";
-import { KomgaStore } from "../store";
 
 export const KomgaBookEvent: ChapterEventHandler = {
   onChaptersMarked: async function (
@@ -9,11 +8,6 @@ export const KomgaBookEvent: ChapterEventHandler = {
     bookIds: string[],
     completed: boolean
   ): Promise<void> {
-    const syncChaptersMarked = await KomgaStore.syncChaptersMarked();
-    if (!syncChaptersMarked) {
-      return;
-    }
-
     const promises = bookIds.map((v) => markAsRead(v, completed));
     const state = await Promise.allSettled(promises);
 

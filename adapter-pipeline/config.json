@@ -1,0 +1,24 @@
+{
+  "indexUrl": "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json",
+  "outputDir": "output",
+  "stateFile": "state/versions.json",
+  "port": 4177,
+  "repoName": "TachiMihon-Translated-Local",
+  "pilot": {
+    "limit": 3,
+    "requiredPackages": [
+      "mangabuddy"
+    ],
+    "preferredPackages": [
+      "mangabuddy",
+      "mangadex",
+      "mangaplus",
+      "webtoons",
+      "komga",
+      "asurascans",
+      "manhwaclan",
+      "reaperscans"
+    ],
+    "preferredLanguages": ["en", "pt", "es", "ja", "ko"]
+  }
+}

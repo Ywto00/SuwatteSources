@@ -3,13 +3,11 @@ import {
   Content,
   DefinedLanguages,
   Highlight,
-  Property,
   PublicationStatus,
   ReadingMode,
-  Tag,
 } from "@suwatte/daisuke";
 import { getHost } from "../api";
-import { BookDto, SeriesDto } from "../types";
+import { BookDto, SeriesDto, WebLinkDto } from "../types";
 import { Sort } from "./constants";
 
 export const convertSort = (val: string | undefined): Sort | undefined => {
@@ -49,7 +47,11 @@ export const genURL = async (url: string) => {
   return val;
 };
 
-export const seriesToTile = (series: SeriesDto, host: string): Highlight => {
+export const seriesToTile = (
+  series: SeriesDto,
+  host: string,
+  asRequest: boolean
+): Highlight => {
   const cover = `${host}/api/v1/series/${series.id}/thumbnail`;
   const subtitle = `${series.booksCount} Book${
     series.booksCount != 1 ? "s" : ""
@@ -65,15 +67,28 @@ export const seriesToTile = (series: SeriesDto, host: string): Highlight => {
         count: series.booksUnreadCount,
       },
     }),
+    ...(asRequest && {
+      link: {
+        request: {
+          configID: "series",
+          page: 1,
+          context: {
+            seriesId: series.id,
+          },
+        },
+      },
+    }),
   };
 };
 
 export const bookToHighlight = (book: BookDto, host: string): Highlight => {
   return {
-    id: book.seriesId,
+    id: `book:${book.id}`,
     title: book.seriesTitle,
-    subtitle: `${book.media.pagesCount}p • ${book.metadata.number} - ${book.metadata.title}`,
+    subtitle: `${book.metadata.title} • ${book.media.pagesCount} Pages • ${book.size}`,
     cover: `${host}/api/v1/books/${book.id}/thumbnail`,
+    acquisitionLink: `${host}/api/v1/books/${book.id}/file`,
+    streamable: true,
     // Blue Badge if book has not been started
     ...(book.readProgress === null && {
       badge: {
@@ -105,54 +120,86 @@ export const seriesToContent = async (series: SeriesDto): Promise<Content> => {
 
   const info: string[] = [];
   if (series.booksCount == series.booksReadCount) {
-    info.push("Finished");
+    info.push("Finished Reading");
   } else if (series.booksCount == series.booksUnreadCount) {
     info.push("Not Started");
   } else if (series.booksUnreadCount != 0) {
-    info.push("Reading");
+    info.push("Started Reading");
   }
 
-  const readingDirection = convertReadingMode(series.metadata.readingDirection);
-  if (readingDirection) {
-    info.push(`${series.metadata.readingDirection}`);
-  }
-
-  const properties: Property[] = [];
-  const tags: Tag[] = [];
   if (series.metadata.publisher) {
-    tags.push({
-      id: "publisher",
-      title: series.metadata.publisher,
-    });
+    info.push(series.metadata.publisher);
   }
-  if (series.metadata.genres && series.metadata.genres.length > 0) {
-    for (const genre of series.metadata.genres) {
-      if (genre !== "") {
-        tags.push({
-          id: genre,
-          title: genre,
-        });
-      }
-    }
+
+  if (series.metadata.genres.length != 0) {
+    info.push(...series.metadata.genres);
   }
-  properties.push({
-    id: "genres",
-    title: "Genres",
-    tags: tags,
-  });
+  const trackerInfo = toTrackerInfoFromLinks(series.metadata.links);
 
   return {
     title: series.metadata.title ?? series.name,
     cover,
     status: convertStatus(series.metadata.status),
     info,
-    properties,
     summary: series.metadata.summary,
-    recommendedPanelMode: readingDirection,
+    trackerInfo,
+    recommendedPanelMode: convertReadingMode(series.metadata.readingDirection),
   };
 };
 
-const convertStatus = (val: string): PublicationStatus | undefined => {
+const TRACKER_NAME_ALIASES: Record<string, string> = {
+  anilist: "anilist",
+  myanimelist: "mal",
+  mangaupdates: "mangaupdates",
+  kitsu: "kitsu",
+  simkl: "simkl",
+  bangumi: "bangumi",
+};
+
+const normalizeTrackerKey = (value?: string): string | undefined => {
+  if (!value) return undefined;
+  const key = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return TRACKER_NAME_ALIASES[key];
+};
+
+const inferTrackerKeyFromUrl = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  const normalized = url.toLowerCase();
+  if (normalized.includes("anilist.co")) return "anilist";
+  if (normalized.includes("myanimelist.net")) return "mal";
+  if (normalized.includes("mangaupdates.com")) return "mangaupdates";
+  if (normalized.includes("kitsu.io")) return "kitsu";
+  if (normalized.includes("simkl.com")) return "simkl";
+  if (normalized.includes("bgm.tv") || normalized.includes("bangumi.tv")) {
+    return "bangumi";
+  }
+  return undefined;
+};
+
+const toTrackerInfoFromLinks = (
+  links?: WebLinkDto[]
+): Record<string, string> | undefined => {
+  if (!Array.isArray(links) || links.length === 0) {
+    return undefined;
+  }
+
+  const trackerInfo: Record<string, string> = {};
+
+  for (const entry of links) {
+    const url = entry?.url?.trim();
+    if (!url) continue;
+
+    const key =
+      normalizeTrackerKey(entry?.label) ?? inferTrackerKeyFromUrl(url);
+    if (!key) continue;
+
+    trackerInfo[key] = url;
+  }
+
+  return Object.keys(trackerInfo).length > 0 ? trackerInfo : undefined;
+};
+
+const convertStatus = (val: string) => {
   val = val.toLowerCase();
 
   switch (val) {
@@ -168,20 +215,17 @@ const convertStatus = (val: string): PublicationStatus | undefined => {
     case "hiatus": {
       return PublicationStatus.HIATUS;
     }
-    default: {
-      return undefined;
-    }
   }
 };
 
-const convertReadingMode = (val: string): ReadingMode | undefined => {
+const convertReadingMode = (val: string) => {
   val = val.toUpperCase();
 
   switch (val) {
-    case "RIGHT_TO_LEFT": {
+    case "LEFT_TO_RIGHT": {
       return ReadingMode.PAGED_MANGA;
     }
-    case "LEFT_TO_RIGHT": {
+    case "RIGHT_TO_LEFT": {
       return ReadingMode.PAGED_COMIC;
     }
     case "VERTICAL": {

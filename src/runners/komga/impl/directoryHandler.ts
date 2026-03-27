@@ -11,16 +11,15 @@ import {
   SortOptions,
   buildSort,
   seriesToTile,
-  bookToHighlight,
   Sort,
   convertSort,
 } from "../utils";
 import {
-  getBooks2,
   getBooksForSeries,
   getHost,
   getSeriesForLibrary,
 } from "../api";
+import { KomgaStore } from "../store";
 
 /**
  * Implementation of the DirectoryHandler Methods
@@ -60,6 +59,7 @@ async function fetchDirectory(request: DirectoryRequest): IResponse {
   if (!host) {
     throw new Error("Host not defined");
   }
+  const asTitle = await KomgaStore.openSeriesAsTitle();
 
   if (seriesId) {
     const sort = convertSort(request.sort?.id) ?? Sort.Number;
@@ -83,42 +83,25 @@ async function fetchDirectory(request: DirectoryRequest): IResponse {
         request.page,
         request.query
       )
-    ).map((v) => seriesToTile(v, host));
+    ).map((v) => seriesToTile(v, host, !asTitle));
     return {
       results,
       isLastPage: results.length < RESULT_COUNT,
     };
   }
 
-  const isSeriesDirectory = request.context?.isSeriesDirectory ?? false;
-  if (isSeriesDirectory) {
-    const sort = convertSort(request.sort?.id) ?? Sort.DateUpdated;
-    const results = (
-      await getSeriesForLibrary(
-        libraryId,
-        buildSort(sort, request.sort?.ascending),
-        filters,
-        request.page,
-        request.query
-      )
-    ).map((v) => seriesToTile(v, host));
-    return {
-      results,
-      isLastPage: results.length < RESULT_COUNT,
-    };
-  } else {
-    const sort = convertSort(request.sort?.id) ?? Sort.DateAdded;
-    const results = (
-      await getBooks2(
-        request.page,
-        buildSort(sort, request.sort?.ascending),
-        filters,
-        request.query
-      )
-    ).map((v) => bookToHighlight(v, host));
-    return {
-      results,
-      isLastPage: results.length < RESULT_COUNT,
-    };
-  }
+  const sort = convertSort(request.sort?.id) ?? Sort.DateUpdated;
+  const results = (
+    await getSeriesForLibrary(
+      libraryId,
+      buildSort(sort, request.sort?.ascending),
+      filters,
+      request.page,
+      request.query
+    )
+  ).map((v) => seriesToTile(v, host, !asTitle));
+  return {
+    results,
+    isLastPage: results.length < RESULT_COUNT,
+  };
 }
