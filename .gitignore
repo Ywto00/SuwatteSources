@@ -186,4 +186,9 @@ __temp__
 TemplateKotlin.md
 DOCUMENTACAO_RUNNERS_E_ROADMAP.md
 adapter-pipeline/output
-src/runners/pilot*/
+
+RunnerREF/
+.claude/
+tachiREF/
+tachiyomiREF/
+RUNNERS_IMPLEMENTATION_SUMMARY.md

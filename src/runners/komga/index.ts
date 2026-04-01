@@ -24,7 +24,7 @@ type Komga = ContentSource;
 // Info
 const info: RunnerInfo = {
   id: "org.komga.plus",
-  name: "Komga Plus",
+  name: "Komga++",
   version: 1.0,
   minSupportedAppVersion: "6.0.0",
   thumbnail: "komga.png",

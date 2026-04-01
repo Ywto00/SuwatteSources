@@ -4,7 +4,6 @@ permissions:
   contents: write
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
@@ -19,7 +18,7 @@ jobs:
           node-version: 22
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: npm run publish:all
+      - run: pnpm run build
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages

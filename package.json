@@ -7,20 +7,9 @@
     "test": "jest",
     "prep": "rm -rf ./dist && tsc",
     "dev": "nodemon",
-    "build": "node scripts/build-safe.mjs",
+    "build": "daisuke build",
     "serve": "daisuke serve",
-    "lint": "eslint",
-    "adapter:sync": "npm --prefix ./adapter-pipeline run sync",
-    "adapter:pilot:select": "npm --prefix ./adapter-pipeline run pilot:select",
-    "adapter:pilot:generate": "npm --prefix ./adapter-pipeline run pilot:generate",
-    "adapter:catalog": "npm --prefix ./adapter-pipeline run catalog",
-    "adapter:export": "npm --prefix ./adapter-pipeline run export:stt",
-    "adapter:serve": "npm --prefix ./adapter-pipeline run serve",
-    "adapter:clean": "npm --prefix ./adapter-pipeline run clean",
-    "adapter:prepare": "node -e \"console.log('[adapter] 1/4 clean')\" && npm run adapter:clean && node -e \"console.log('[adapter] 2/4 sync')\" && npm run adapter:sync && node -e \"console.log('[adapter] 3/4 select pilots (max 3)')\" && npm run adapter:pilot:select && node -e \"console.log('[adapter] 4/4 generate pilots')\" && npm run adapter:pilot:generate",
-    "adapter:postbuild": "npm run adapter:catalog && npm run adapter:export",
-    "adapter:all": "npm run adapter:clean && npm run adapter:sync && npm run adapter:pilot:select && npm run adapter:pilot:generate && npm run adapter:catalog && npm run adapter:export",
-    "publish:all": "npm run adapter:prepare && node -e \"console.log('[adapter] compiling .stt with daisuke build')\" && pnpm run build && node -e \"console.log('[adapter] exporting experimental pages')\" && npm run adapter:postbuild"
+    "lint": "eslint"
   },
   "private": true,
   "keywords": [

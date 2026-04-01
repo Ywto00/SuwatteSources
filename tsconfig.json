@@ -98,9 +98,11 @@
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": true                                 /* Skip type checking all .d.ts files. */
   },
+  "include": ["src/**/*"],
   "exclude": [
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
-    "adapter-pipeline/**"
+    "adapter-pipeline/**",
+    "RunnerREF/**"
   ]
 }
