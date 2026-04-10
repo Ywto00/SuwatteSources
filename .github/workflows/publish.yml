@@ -7,10 +7,12 @@ on:
   push:
     branches:
       - main
+      - fix
 
 jobs:
-  publish:
+  publish-prod:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,4 +24,20 @@ jobs:
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
+          folder: stt
+
+  publish-test:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/fix'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages-test
           folder: stt
