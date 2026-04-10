@@ -1,0 +1,11 @@
+export declare const COMPLETED_STATUS_LIST: string[];
+export declare const ONGOING_STATUS_LIST: string[];
+export declare const HIATUS_STATUS_LIST: string[];
+export declare const CANCELLED_STATUS_LIST: string[];
+export declare const DAY_DATE_LIST: string[];
+export declare const HOUR_DATE_LIST: string[];
+export declare const MINUTE_DATE_LIST: string[];
+export declare const SECONDS_DATE_LIST: string[];
+export declare const WEEK_DATE_LIST: string[];
+export declare const MONTH_DATE_LIST: string[];
+export declare const YEAR_DATE_LIST: string[];

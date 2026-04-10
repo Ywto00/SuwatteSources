@@ -1,16 +1,10 @@
 import { CatalogRating, ContentSource, RunnerInfo, SourceConfig } from "@suwatte/daisuke";
-import {
-  MadBuddyContentSource,
-  MadBuddyDirectoryHandler,
-  MadBuddyImageHandler,
-  MadBuddyPreferenceProvider,
-  MadBuddySetupProvider,
-} from "./impl";
+import { MadThemeTemplate, MadThemeContext } from "../../template/madtheme";
 
 const info: RunnerInfo = {
   id: "org.mangabuddy",
   name: "MangaBuddy",
-  version: 0.2,
+  version: 0.5,
   minSupportedAppVersion: "6.0.0",
   thumbnail: "mangabuddy.png",
   website: "https://mangabuddy.com",
@@ -24,12 +18,15 @@ const config: SourceConfig = {
   disableTrackerLinking: false,
 };
 
-export const Target: ContentSource = {
+const context: MadThemeContext = {
+  storeKeyPrefix: "mangabuddy",
+  displayName: "MangaBuddy",
+  defaultBaseUrl: "https://mangabuddy.com",
+  
+};
+
+export const Target: ContentSource = new MadThemeTemplate({
+  context,
   info,
   config,
-  ...MadBuddyContentSource,
-  ...MadBuddyDirectoryHandler,
-  ...MadBuddyImageHandler,
-  ...MadBuddyPreferenceProvider,
-  ...MadBuddySetupProvider,
-};
+});

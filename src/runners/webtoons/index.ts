@@ -1,11 +1,7 @@
 import { CatalogRating, ContentSource, RunnerInfo, SourceConfig } from "@suwatte/daisuke";
-import {
-  WebtoonsContentSource,
-  WebtoonsDirectoryHandler,
-  WebtoonsImageHandler,
-  WebtoonsPreferenceProvider,
-  WebtoonsSetupProvider,
-} from "./impl";
+import { WebtoonsContentSource } from "./contentSource";
+import { WebtoonsDirectoryHandler } from "./directoryHandler";
+import { WebtoonsImageHandler } from "./imageHandler";
 
 const info: RunnerInfo = {
   id: "org.webtoons",
@@ -30,6 +26,4 @@ export const Target: ContentSource = {
   ...WebtoonsContentSource,
   ...WebtoonsDirectoryHandler,
   ...WebtoonsImageHandler,
-  ...WebtoonsPreferenceProvider,
-  ...WebtoonsSetupProvider,
 };
