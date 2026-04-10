@@ -19,21 +19,35 @@ import {
 const toPath = (value: string): string => {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
+  const normalizePath = (path: string): string => {
+    let normalized = path.replace(/\/+$/, "").replace(/^\/manga\//i, "/");
+    if (normalized && !normalized.startsWith("/")) {
+      normalized = `/${normalized}`;
+    }
+    return normalized;
+  };
   if (/^https?:\/\//i.test(raw)) {
     try {
-      return new URL(raw).pathname.replace(/\/+$/, "").replace(/^\/manga\//i, "/");
+      return normalizePath(new URL(raw).pathname);
     } catch {
-      return raw.replace(/\/+$/, "").replace(/^\/manga\//i, "/");
+      return normalizePath(raw);
     }
   }
-  return raw.replace(/\/+$/, "").replace(/^\/manga\//i, "/");
+  return normalizePath(raw);
 };
 
 const chapterBelongsToContent = (chapterId: string, contentId: string): boolean => {
   const chapterPath = toPath(chapterId).toLowerCase();
   const contentPath = toPath(contentId).toLowerCase();
   if (!chapterPath || !contentPath) return true;
-  return chapterPath.startsWith(`${contentPath}/`);
+  if (chapterPath.startsWith(`${contentPath}/`)) {
+    return true;
+  }
+  const contentSlug = contentPath.split("/").filter(Boolean).pop() ?? "";
+  if (!contentSlug) {
+    return false;
+  }
+  return chapterPath.includes(`/${contentSlug}/`);
 };
 
 export const MadBuddyContentSource = {
@@ -79,7 +93,10 @@ export const MadBuddyContentSource = {
       }
     }
 
-    chapters = chapters.filter((chapter) => chapterBelongsToContent(chapter.chapterId, contentId));
+    const filteredChapters = chapters.filter((chapter) => chapterBelongsToContent(chapter.chapterId, contentId));
+    if (filteredChapters.length) {
+      chapters = filteredChapters;
+    }
 
     return chapters.map(chapter => ({
       chapterId: chapter.chapterId,
@@ -130,6 +147,15 @@ export const MadBuddyContentSource = {
         }
       } catch (error) {
         console.warn("API fetch failed, falling back to HTML parsing:", error);
+      }
+    }
+
+    const chapterPath = toPath(chapterId).toLowerCase();
+    const chapterSlug = chapterPath.split("/").filter(Boolean).pop() ?? "";
+    if (chapterSlug) {
+      const scopedPages = pages.filter((p) => String(p).toLowerCase().includes(chapterSlug));
+      if (scopedPages.length) {
+        pages = scopedPages;
       }
     }
 

@@ -292,7 +292,9 @@ export const parseMangaBuddyChapters = (
   baseUrl: string
 ): Array<{ chapterId: string; title: string; index: number; number: number; date: Date }> => {
   const $ = Cheerio.load(html);
-  const rows = $(".chapter-list a[href], #chapter-list a[href], .detail-chlist a[href], li.wp-manga-chapter a[href]").toArray();
+  const rows = $(
+    ".chapter-list a[href], #chapter-list a[href], .detail-chlist a[href], .chap-list a[href], .list-chapter a[href], .chapter__list a[href], li.wp-manga-chapter a[href]"
+  ).toArray();
 
   console.log(`[MangaBuddy] Found ${rows.length} chapter row candidates`);
 
@@ -359,7 +361,7 @@ export const parseMangaBuddyPages = (html: string, baseUrl: string): string[] =>
   const $ = Cheerio.load(html);
   const readers = $("#chapter-reader, .container-chapter-reader, .chapter-content, .reading-content");
   const nodeSelector =
-    ".page-break img, #chapter-images img, .chapter-image img, .viewer img, .image-container img, .manga-page img, .chapter-reader img, img[data-src], img[src]";
+    ".page-break img, #chapter-images img, .chapter-image img, .viewer img, .image-container img, .manga-page img, .chapter-reader img, img[data-src], img[data-lazy-src], img[data-original], img[data-srcset], img[data-lazy-srcset], img[srcset], img[src]";
   const nodes = readers.length ? readers.find(nodeSelector).toArray() : $.root().find(nodeSelector).toArray();
 
   console.log(`[MangaBuddy] Found ${nodes.length} image elements with selectors`);
@@ -373,6 +375,8 @@ export const parseMangaBuddyPages = (html: string, baseUrl: string): string[] =>
       String($node.attr("data-lazy-src") ?? "").trim() ||
       String($node.attr("data-original") ?? "").trim() ||
       String($node.attr("data-url") ?? "").trim() ||
+      firstSrcCandidate(String($node.attr("data-srcset") ?? "")) ||
+      firstSrcCandidate(String($node.attr("data-lazy-srcset") ?? "")) ||
       firstSrcCandidate(String($node.attr("srcset") ?? "")) ||
       String($node.attr("src") ?? "").trim();
     if (!src) continue;
@@ -385,10 +389,11 @@ export const parseMangaBuddyPages = (html: string, baseUrl: string): string[] =>
   // If no images found, try regex fallback with improved pattern
   if (!out.length) {
     console.log("[MangaBuddy] No images from selectors, trying regex fallback");
+    const source = html.replace(/\\\//g, "/");
     const regex = /(https?:\/\/[^\"'\s>]+\.(?:jpg|jpeg|png|webp|gif|webm))(?:\?[^\"'\s>]*)?/gi;
     const found = new Set<string>();
     let match: RegExpExecArray | null;
-    while ((match = regex.exec(html)) !== null) {
+    while ((match = regex.exec(source)) !== null) {
       const img = String(match[1] ?? "").trim();
       if (!img) continue;
       found.add(resolveUrl(baseUrl, img));
