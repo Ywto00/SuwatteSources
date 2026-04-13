@@ -42,6 +42,7 @@ export const ManhwaBuddySetupProvider: RunnerSetupProvider = {
     if (!url) {
       throw new Error("Base URL is required");
     }
+    // Normalize base URL: remove trailing slashes and optional /home suffix
     const normalized = url.replace(/\/+$/, "").replace(/\/home$/i, "");
     await ManhwaBuddyStore.setBaseUrl(normalized);
     await ManhwaBuddyStore.setCookie(String(form.cookie ?? ""));

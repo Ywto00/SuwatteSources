@@ -6,7 +6,7 @@ export const ManhwaBuddyPreferenceProvider: RunnerPreferenceProvider = {
     return {
       sections: [
         {
-          header: "ManhwaBuddy.com Settings",
+          header: "ManhwaBuddy Settings",
           footer: "Optional: configure cookie and user-agent.",
           children: [
             UITextField({

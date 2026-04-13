@@ -1,6 +1,7 @@
 import * as Cheerio from "cheerio";
 import * as he from "he";
 import { PublicationStatus } from "@suwatte/daisuke";
+import { WebtoonsStore } from "./store";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -9,7 +10,13 @@ const pick = ($root: Cheerio.Cheerio<any>, selectors: string[], attr?: string): 
   for (const selector of selectors) {
     const node = $root.find(selector).first();
     if (!node.length) continue;
-    const raw = attr ? node.attr(attr) : node.text();
+    const raw = attr
+      ? node.attr(attr)
+      : (() => {
+          const cloned = node.clone();
+          cloned.find("br").replaceWith(" ");
+          return cloned.text();
+        })();
     const value = String(raw ?? "").trim();
     if (value) return value;
   }
@@ -134,8 +141,13 @@ const normalizeWebtoonsContentUrl = (baseUrl: string, href: string): string => {
       url.searchParams.delete("episodeNo");
     }
 
-    if (!url.pathname.includes("/list")) {
-      return "";
+    // Keep the real, stable card link from search whenever it already includes title_no.
+    // Some locales/layouts do not expose a strict /list path in every card variant.
+    if (!url.pathname.includes("/list") && !url.pathname.includes("/canvas/")) {
+      const segments = url.pathname.split("/").filter(Boolean);
+      if (segments.length >= 3) {
+        url.pathname = `/${segments[0]}/${segments[1]}/${segments[2]}/list`;
+      }
     }
 
     return url.toString();
@@ -145,6 +157,12 @@ const normalizeWebtoonsContentUrl = (baseUrl: string, href: string): string => {
 };
 
 export type WebtoonsDirectoryItem = { id: string; title: string; cover: string };
+
+const extractQueryNumber = (urlLike: string, key: string): string => {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(urlLike).match(new RegExp(`[?&]${escaped}=(\\d+)`, "i"));
+  return match ? match[1] : "";
+};
 
 type EpisodeListResponse = {
   result?: {
@@ -156,13 +174,13 @@ type EpisodeListResponse = {
   };
 };
 
-export const parseWebtoonsDirectory = (
+export const parseWebtoonsDirectory = async (
   html: string,
   baseUrl: string
-): WebtoonsDirectoryItem[] => {
+): Promise<WebtoonsDirectoryItem[]> => {
   const $ = Cheerio.load(html);
   const nodes = $(
-    "#content a.link._card_item, .webtoon_list li a.link._card_item, a.link._card_item, ._searchResultItem a, .card_item a"
+    "#content a.link._card_item, .webtoon_list li a.link._card_item, .webtoon_list li > a[href], a.link._card_item, a._searchResultItem, ._searchResultItem a, .card_item a, [data-title-no]"
   ).toArray();
   const out: WebtoonsDirectoryItem[] = [];
   const seen = new Set<string>();
@@ -180,34 +198,50 @@ export const parseWebtoonsDirectory = (
       pick($node, ["img[data-url]"], "data-url") ||
       pick($node, ["img[data-src]"], "data-src") ||
       pick($node, ["img[src]"], "src");
+
     // Fallback for cards where href is relative/obfuscated but title_no is present in attributes.
+    let titleNo = "";
     if (!contentUrl) {
-      const titleNo =
+      titleNo =
         String($node.attr("data-title-no") ?? "").trim() ||
         String($node.find("[data-title-no]").first().attr("data-title-no") ?? "").trim();
       if (titleNo) {
         const hrefSource = String(href ?? "");
         const pathMatch = hrefSource.match(/\/([a-z-]{2,8})\/(canvas|[a-z-]+)\/([^/?#]+)\/(?:list|episode|viewer)/i);
-        const root = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+        const { root, lang: baseLang } = getWebtoonsRootAndLang(baseUrl);
         if (pathMatch) {
           const lang = pathMatch[1];
           const typeOrGenre = pathMatch[2];
           const slug = pathMatch[3];
           contentUrl = `${root}/${lang}/${typeOrGenre}/${slug}/list?title_no=${encodeURIComponent(titleNo)}`;
         } else {
-          contentUrl = `${root}/list?title_no=${encodeURIComponent(titleNo)}`;
+          contentUrl = `${root}/${baseLang}/list?title_no=${encodeURIComponent(titleNo)}`;
         }
       }
+    } else {
+      // If we have a contentUrl, try to extract title_no from it
+      titleNo = extractQueryNumber(contentUrl, "title_no") || extractQueryNumber(contentUrl, "titleNo");
     }
 
     if (!contentUrl || !title || seen.has(contentUrl)) continue;
     seen.add(contentUrl);
 
+    const resolvedCover = resolveUrl(baseUrl, cover);
     out.push({
       id: contentUrl,
       title: he.decode(title).replace(/\s+/g, " ").trim(),
-      cover: resolveUrl(baseUrl, cover),
+      cover: resolvedCover,
     });
+
+    // Cache cover by title_no for later detail pages (if available)
+    if (titleNo && resolvedCover) {
+      try {
+        await WebtoonsStore.setCachedCover(titleNo, resolvedCover);
+      } catch {
+        // ignore cache errors
+      }
+    }
+
     if (out.length >= 120) break;
   }
 
@@ -225,13 +259,19 @@ export const parseWebtoonsContent = (
   creators: string[];
   status?: PublicationStatus;
   genres?: string[];
+  webTitleNo?: string;
 } => {
   const $ = Cheerio.load(html);
   const root = $.root();
   const title = pick(root, ["h1.subj", "h3.subj", ".info .title", "h1"]) || `Webtoons ${contentId}`;
-  const cover =
-    pick(root, [".detail_body img"], "src") ||
-    pick(root, ["meta[property='og:image']"], "content");
+  // Prefer explicit thumbnail area, then og:image. Avoid small QR images typically inside .detail_install_app
+  let cover =
+    pick(root, [".detail_header .thmb img"], "src") ||
+    pick(root, ["meta[property='og:image']"], "content") ||
+    pick(root, [".detail_body img"], "src");
+  if (cover && /\/qr\//i.test(cover)) {
+    cover = ""; // ignore QR code images
+  }
   const summary =
     pick(root, ["p.summary", ".detail .summary", "meta[name='description']"]) || "No summary";
 
@@ -266,6 +306,10 @@ export const parseWebtoonsContent = (
     creators,
     status,
     genres: genres.length ? genres : undefined,
+    webTitleNo: (() => {
+      const raw = contentId.startsWith("http") ? contentId : resolveUrl(baseUrl, contentId);
+      return extractQueryNumber(raw, "title_no") || extractQueryNumber(raw, "titleNo");
+    })(),
   };
 };
 
@@ -273,18 +317,21 @@ export const extractEpisodeListData = (
   html: string,
   url: string
 ): { titleNo: string; type: string } => {
-  const urlObj = new URL(url);
-  const urlTitleNo = urlObj.searchParams.get("title_no") || urlObj.searchParams.get("titleNo");
+  // Runtime compatibility: some environments do not expose global URL.
+  const queryMatch = String(url).match(/[?&]title_(?:no|No)=([^&#]+)/i);
+  const urlTitleNo = queryMatch ? decodeURIComponent(queryMatch[1]) : "";
 
   if (urlTitleNo) {
-    const pathSegments = urlObj.pathname.split("/").filter(Boolean);
+    const pathOnly = String(url).split("?")[0] || "";
+    const pathSegments = pathOnly.split("/").filter(Boolean);
     const type = pathSegments[1] === "canvas" ? "canvas" : "webtoon";
     return { titleNo: urlTitleNo, type };
   }
 
   const titleNoMatch = html.match(/title_no\s*[=:]\s*["']?(\d+)["']?/i);
   if (titleNoMatch) {
-    const pathSegments = urlObj.pathname.split("/").filter(Boolean);
+    const pathOnly = String(url).split("?")[0] || "";
+    const pathSegments = pathOnly.split("/").filter(Boolean);
     const type = pathSegments[1] === "canvas" ? "canvas" : "webtoon";
     return { titleNo: titleNoMatch[1], type };
   }
@@ -304,6 +351,23 @@ const parseEpisodeTitle = (title: string, index: number): { number: number; disp
     return { number: num, display: title };
   }
   return { number: index + 1, display: title };
+};
+
+const extractEpisodeNumberFromUrl = (urlLike: string): number | null => {
+  const raw = String(urlLike ?? "");
+  const queryMatch = raw.match(/[?&]episode_(?:no|No)=(\d+)/i);
+  if (queryMatch) {
+    const value = Number(queryMatch[1]);
+    if (Number.isFinite(value)) return value;
+  }
+
+  const pathMatch = raw.match(/\/episode-(\d+)\//i);
+  if (pathMatch) {
+    const value = Number(pathMatch[1]);
+    if (Number.isFinite(value)) return value;
+  }
+
+  return null;
 };
 
 const normalizeViewerLink = (urlLike: string): string => {
@@ -351,19 +415,24 @@ export const parseWebtoonsChaptersFromHtml = (
 
     const title =
       pick($row, [".subj", ".episode_title", ".title"]) ||
-      $row.text().replace(/\s+/g, " ").trim();
+      (() => {
+        const cloned = $row.clone();
+        cloned.find("br").replaceWith(" ");
+        return cloned.text().replace(/\s+/g, " ").trim();
+      })();
     if (!title) continue;
 
     const absolute = normalizeViewerLink(resolveUrl(baseUrl, href));
     if (!absolute || seen.has(absolute)) continue;
     seen.add(absolute);
 
+    const episodeNumber = extractEpisodeNumberFromUrl(absolute);
     const match = parseEpisodeTitle(title, out.length);
     out.push({
       chapterId: absolute,
       title: he.decode(title),
       index: out.length,
-      number: match.number,
+      number: episodeNumber ?? match.number,
       date: new Date(0),
     });
   }
@@ -384,50 +453,109 @@ export const parseWebtoonsChapters = (
   try {
     const data: EpisodeListResponse = JSON.parse(html);
     const episodes = data.result?.episodeList || [];
+    const parsed = episodes
+      .map((ep, index) => {
+        const chapterId = normalizeViewerLink(ep.viewerLink);
+        if (!chapterId) return null;
+        const episodeNumber = extractEpisodeNumberFromUrl(chapterId);
+        const match = parseEpisodeTitle(ep.episodeTitle, index);
+        return {
+          chapterId,
+          title: he.decode(ep.episodeTitle),
+          index,
+          number: episodeNumber ?? match.number,
+          date: parseChapterDate(ep.exposureDateMillis),
+        };
+      })
+      .filter((item): item is {
+        chapterId: string;
+        title: string;
+        index: number;
+        number: number;
+        date: Date;
+      } => item !== null)
+      .sort((a, b) => a.number - b.number)
+      .map((item, index) => ({ ...item, index }));
 
-    return episodes.map((ep, index) => {
-      const match = parseEpisodeTitle(ep.episodeTitle, index);
-      return {
-        chapterId: normalizeViewerLink(ep.viewerLink),
-        title: he.decode(ep.episodeTitle),
-        index,
-        number: match.number,
-        date: parseChapterDate(ep.exposureDateMillis),
-      };
-    }).reverse();
+    return parsed;
   } catch (error) {
     console.warn("Failed to parse Webtoons API response as JSON:", error);
     return [];
   }
 };
 
+const normalizeViewerUrl = (baseUrl: string, value?: string): string => {
+  const absolute = resolveUrl(baseUrl, value);
+  if (!absolute || absolute === "#") return "";
+  try {
+    const parsed = new URL(absolute);
+    if (/^m\.webtoons\.com$/i.test(parsed.hostname)) {
+      parsed.hostname = "www.webtoons.com";
+    }
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+};
+
+export const parseWebtoonsViewerNavigation = (
+  html: string,
+  baseUrl: string
+): { nextChapterId?: string; prevChapterId?: string } => {
+  const $ = Cheerio.load(html);
+  const nextHref =
+    $(".paginate.v2 a.pg_next[href]").first().attr("href") ||
+    $("#toolbar .paginate a.pg_next[href]").first().attr("href") ||
+    "";
+  const prevHref =
+    $(".paginate.v2 a.pg_prev[href]").first().attr("href") ||
+    $("#toolbar .paginate a.pg_prev[href]").first().attr("href") ||
+    "";
+
+  const nextChapterId = normalizeViewerUrl(baseUrl, String(nextHref).trim());
+  const prevChapterId = normalizeViewerUrl(baseUrl, String(prevHref).trim());
+
+  // Webtoons labels are page-oriented (next page can be newer episode).
+  // Map to reader progression semantics expected by runner navigation.
+  return {
+    nextChapterId: prevChapterId || undefined,
+    prevChapterId: nextChapterId || undefined,
+  };
+};
+
 const imageUrlRegex = /(https?:\/\/[^\"'\s>]+\.(?:jpg|jpeg|png|webp|gif))(?:\?[^\"'\s>]*)?/gi;
 
 export const parseWebtoonsPages = (html: string, baseUrl: string): string[] => {
   const $ = Cheerio.load(html);
-  const nodes = $(
-    "div#_imageList > img, #_imageList img, .viewer_lst img, " +
-    ".chapter-content img, .reading-content img, .image-viewer img, " +
-    ".viewer img, .page-image img, ._imageList img"
+  const primaryNodes = $("#_imageList > img, #_imageList img").toArray();
+  const fallbackNodes = $(
+    ".viewer_lst img, .chapter-content img, .reading-content img, .image-viewer img, .viewer img, .page-image img, ._imageList img"
   ).toArray();
+  const nodes = primaryNodes.length ? primaryNodes : fallbackNodes;
   const out: string[] = [];
+  const seen = new Set<string>();
 
   for (const node of nodes) {
     const $node = $(node);
-    let raw =
-      String($node.attr("data-url") ?? "").trim() ||
-      String($node.attr("data-src") ?? "").trim() ||
-      String($node.attr("data-original") ?? "").trim() ||
-      String($node.attr("src") ?? "").trim();
+    const dataUrl = String($node.attr("data-url") ?? "").trim();
+    const dataSrc = String($node.attr("data-src") ?? "").trim();
+    const dataOriginal = String($node.attr("data-original") ?? "").trim();
+    const src = String($node.attr("src") ?? "").trim();
+
+    let raw = dataUrl || dataSrc || dataOriginal || src;
 
     if (!raw) {
       const srcset = String($node.attr("srcset") ?? "").trim();
       if (srcset) raw = srcset.split(/[\s,]+/)[0];
     }
 
+    // Skip transparent placeholders when no real data-url exists.
+    if (!dataUrl && /bg_transparency\.png/i.test(raw)) continue;
     if (!raw) continue;
-    const clean = raw.replace(/[?&](type|quality|v)=\w+/gi, "");
-    out.push(resolveUrl(baseUrl, clean));
+    const resolved = resolveUrl(baseUrl, raw);
+    if (!resolved || seen.has(resolved)) continue;
+    seen.add(resolved);
+    out.push(resolved);
   }
 
   if (!out.length) {

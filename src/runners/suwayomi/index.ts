@@ -33,16 +33,16 @@ const info: RunnerInfo = {
 
 // Config
 const config: SourceConfig = {
-  disableChapterDataCaching: true, // Refetch image list each time
-  // disableLibraryActions: false,
-  // disableContentLinking: false,
-  // disableMigrationDestination: false,
-  // disableUpdateChecks: false,
-  disableCustomThumbnails: true,
-  disableLanguageFlags: true,
+  disableChapterDataCaching: false,
+  disableLibraryActions: false,
+  disableContentLinking: false,
+  disableMigrationDestination: false,
+  disableUpdateChecks: false,
+  disableCustomThumbnails: false,
+  disableLanguageFlags: false,
   disableTrackerLinking: false,
   allowsMultipleInstances: true,
-  requiresAuthenticationToAccessContent: false, // Authentication is optional and configurable
+  requiresAuthenticationToAccessContent: false,
 };
 
 export const Target: Suwayomi = {

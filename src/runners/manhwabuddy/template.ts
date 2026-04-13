@@ -37,6 +37,7 @@ export class ManhwaBuddyTemplate implements ContentSource {
   }
 
   async getContent(contentId: string): Promise<Content> {
+    // Delegate to content source parser
     return ManhwaBuddyContentSource.getContent(contentId);
   }
 
@@ -49,6 +50,7 @@ export class ManhwaBuddyTemplate implements ContentSource {
   }
 
   async getDirectory(request: DirectoryRequest): Promise<PagedResult> {
+    // Delegate to directory handler which builds search/catalog URLs
     return ManhwaBuddyDirectoryHandler.getDirectory(request);
   }
 

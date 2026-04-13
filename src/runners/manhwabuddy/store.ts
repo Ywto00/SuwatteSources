@@ -1,5 +1,6 @@
 // ObjectStore is globally available, no import needed
 
+// Simple settings store wrapper for runner preferences
 export const ManhwaBuddyStore = {
   baseUrl: async (): Promise<string> => {
     return (await ObjectStore.string("manhwabuddy_baseUrl")) ??

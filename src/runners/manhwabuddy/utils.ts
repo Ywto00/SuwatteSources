@@ -1,3 +1,7 @@
+// Utility parsers and request helpers for ManhwaBuddy runner.
+// - HTML parsing helpers using Cheerio
+// - URL resolution and HTTP request wrapper
+// - Parsers for directory, content, chapters and pages
 import * as Cheerio from "cheerio";
 import { PublicationStatus } from "@suwatte/daisuke";
 import { ManhwaBuddyDirectoryItem } from "./types";
@@ -16,6 +20,7 @@ const pick = ($root: Cheerio.Cheerio<any>, selectors: string[], attr?: string): 
   return "";
 };
 
+// Parse human-friendly relative dates like "2 days ago" or "yesterday"
 const parseRelativeDate = (text: string): Date | undefined => {
   const lower = text.trim().toLowerCase();
   if (!lower) return undefined;
@@ -67,6 +72,7 @@ const parseRelativeDate = (text: string): Date | undefined => {
   return date;
 };
 
+// Try to extract a numerical chapter value from chapter title text
 const parseChapterNumber = (title: string): number | undefined => {
   const normalized = title
     .replace(/(\d)-(\d)/g, "$1.$2")
@@ -151,6 +157,7 @@ export const requestHtml = async (
   return html;
 };
 
+// Helpers to build search/genre URLs used by directory handler
 export const buildManhwaBuddySearchUrl = (baseUrl: string, query: string, page: number = 1): string => {
   const root = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const q = encodeURIComponent(query);
@@ -188,7 +195,7 @@ export const parseManhwaBuddyDirectory = (
       title,
       cover: resolveUrl(baseUrl, cover),
     });
-    if (items.length >= 60) return items;
+    if (items.length >= 60) return items; // limit to avoid huge lists
   }
 
   // Fallback: popular items (".item-move" or generic)
@@ -211,7 +218,7 @@ export const parseManhwaBuddyDirectory = (
         title,
         cover: resolveUrl(baseUrl, cover),
       });
-      if (items.length >= 60) break;
+      if (items.length >= 60) break; // cap fallback as well
     }
   }
 
@@ -285,6 +292,7 @@ export const parseManhwaBuddyContent = (
   };
 };
 
+// Parse various date formats or relative date strings to a Date
 const parseDate = (dateStr: string): Date => {
   const text = dateStr.trim();
   if (!text) return new Date(0);

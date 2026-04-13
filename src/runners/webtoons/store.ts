@@ -28,4 +28,13 @@ export const WebtoonsStore = {
   setUserAgent: async (userAgent: string): Promise<void> => {
     await ObjectStore.set("webtoons_userAgent", userAgent.trim());
   },
+  // Cache cover URLs by title_no (used to display cover on detail pages when missing)
+  setCachedCover: async (titleNo: string, coverUrl: string): Promise<void> => {
+    if (!titleNo || !coverUrl) return;
+    await ObjectStore.set(`webtoons_cover_${titleNo}`, coverUrl.trim());
+  },
+  getCachedCover: async (titleNo: string): Promise<string | null> => {
+    if (!titleNo) return null;
+    return (await ObjectStore.string(`webtoons_cover_${titleNo}`)) ?? null;
+  },
 };

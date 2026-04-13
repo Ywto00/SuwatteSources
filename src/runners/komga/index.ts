@@ -35,14 +35,14 @@ const info: RunnerInfo = {
 
 // Config
 const config: SourceConfig = {
-  disableChapterDataCaching: true, // Refetch image list each time
+  disableChapterDataCaching: true, 
   disableLibraryActions: false,
-  disableContentLinking: true,
-  disableCustomThumbnails: true,
-  disableLanguageFlags: true,
-  disableMigrationDestination: true,
+  disableContentLinking: false,
+  disableCustomThumbnails: false,
+  disableLanguageFlags: false,
+  disableMigrationDestination: false,
   disableTrackerLinking: false,
-  disableUpdateChecks: true,
+  disableUpdateChecks: false,
   allowsMultipleInstances: true,
   requiresAuthenticationToAccessContent: true,
 };

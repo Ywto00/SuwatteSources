@@ -4,7 +4,7 @@ import { MadThemeTemplate, MadThemeContext } from "../../template/madtheme";
 const info: RunnerInfo = {
   id: "org.mangabuddy",
   name: "MangaBuddy",
-  version: 0.5,
+  version: 1.0,
   minSupportedAppVersion: "6.0.0",
   thumbnail: "mangabuddy.png",
   website: "https://mangabuddy.com",
@@ -16,6 +16,15 @@ const config: SourceConfig = {
   allowsMultipleInstances: true,
   disableLibraryActions: false,
   disableTrackerLinking: false,
+  disableChapterDataCaching: false,
+  disableChapterDates: false,
+  disableLanguageFlags: false,
+  disableTagNavigation: false,
+  disableUpdateChecks: false,
+  disableCustomThumbnails: false,
+  disableContentLinking: false,
+  disableMigrationDestination: false,
+  requiresAuthenticationToAccessContent: false,
 };
 
 const context: MadThemeContext = {

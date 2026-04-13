@@ -4,13 +4,13 @@ import { WebtoonsDirectoryHandler } from "./directoryHandler";
 import { WebtoonsImageHandler } from "./imageHandler";
 
 const info: RunnerInfo = {
-  id: "org.webtoons",
-  name: "Webtoons.com",
-  version: 0.2,
+  id: "org.webtoons.en",
+  name: "Webtoons(EN)",
+  version: 0.3,
   minSupportedAppVersion: "6.0.0",
   thumbnail: "webtoons.png",
   website: "https://www.webtoons.com",
-  supportedLanguages: ["en", "es", "fr", "de", "pt", "zh", "ko", "ja", "th", "id", "ru", "ar"],
+  supportedLanguages: ["en"],
   rating: CatalogRating.SAFE,
 };
 
@@ -18,6 +18,15 @@ const config: SourceConfig = {
   allowsMultipleInstances: true,
   disableLibraryActions: false,
   disableTrackerLinking: false,
+  disableChapterDataCaching: false,
+  disableChapterDates: false,
+  disableLanguageFlags: false,
+  disableTagNavigation: false,
+  disableUpdateChecks: false,
+  disableCustomThumbnails: false,
+  disableContentLinking: false,
+  disableMigrationDestination: false,
+  requiresAuthenticationToAccessContent: false,
 };
 
 export const Target: ContentSource = {

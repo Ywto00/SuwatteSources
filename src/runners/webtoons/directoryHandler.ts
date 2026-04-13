@@ -31,7 +31,8 @@ export const WebtoonsDirectoryHandler: DirectoryHandler = {
       const url = buildWebtoonsSearchUrl(baseUrl, query);
       try {
         const html = await requestHtml(url, baseUrl, { cookie, userAgent });
-        items = parseWebtoonsDirectory(html, baseUrl).map((item: DirectoryItem) => ({
+        const parsed = await parseWebtoonsDirectory(html, baseUrl);
+        items = parsed.map((item: DirectoryItem) => ({
           id: item.id,
           title: item.title,
           cover: item.cover ?? "",
@@ -44,7 +45,8 @@ export const WebtoonsDirectoryHandler: DirectoryHandler = {
       for (const target of catalogUrls) {
         try {
           const html = await requestHtml(target, baseUrl, { cookie, userAgent });
-          items = parseWebtoonsDirectory(html, baseUrl).map((item: DirectoryItem) => ({
+          const parsed = await parseWebtoonsDirectory(html, baseUrl);
+          items = parsed.map((item: DirectoryItem) => ({
             id: item.id,
             title: item.title,
             cover: item.cover ?? "",

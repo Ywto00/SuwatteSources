@@ -1,3 +1,4 @@
+// Directory handler: builds target URL for catalog/search/genres and parses HTML
 import {
   DirectoryConfig,
   DirectoryHandler,
@@ -26,6 +27,7 @@ export const ManhwaBuddyDirectoryHandler: DirectoryHandler = {
     let items: PagedResult["results"] = [];
     let lastError: unknown;
 
+    // Determine which page to fetch: search, popular, latest, genre or root
     let targetUrl = "";
     if (query) {
       // Search

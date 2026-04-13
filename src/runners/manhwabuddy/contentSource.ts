@@ -1,3 +1,4 @@
+// Content source: fetches content metadata, chapters and pages using utils parsers
 import {
   Chapter,
   ChapterData,
