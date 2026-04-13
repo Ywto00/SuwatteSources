@@ -17,13 +17,7 @@
     "suwatte"
   ],
   "author": {
-<<<<<<< HEAD
-    "name": "everpcpc",
-    "email": "suwatte@everpcpc.com",
-    "url": "https://everpcpc.com"
-=======
     "name": "ywt000"
->>>>>>> 644fca8 (feat(Komga,Suwayomi):add tracking and save to library)
   },
   "license": "MIT",
   "devDependencies": {

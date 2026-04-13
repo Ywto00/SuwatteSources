@@ -6,7 +6,7 @@ import { WebtoonsImageHandler } from "./imageHandler";
 const info: RunnerInfo = {
   id: "org.webtoons.en",
   name: "Webtoons(EN)",
-  version: 0.3,
+  version: 1.0,
   minSupportedAppVersion: "6.0.0",
   thumbnail: "webtoons.png",
   website: "https://www.webtoons.com",

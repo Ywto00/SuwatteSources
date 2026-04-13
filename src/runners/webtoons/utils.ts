@@ -1,5 +1,7 @@
 import * as Cheerio from "cheerio";
 import * as he from "he";
+import { resolveUrl, normalizeText, imageFromElement, normalizeViewerUrl, extractQueryNumber } from "../../common";
+export { resolveUrl, normalizeText, imageFromElement, normalizeViewerUrl, extractQueryNumber } from "../../common";
 import { PublicationStatus } from "@suwatte/daisuke";
 import { WebtoonsStore } from "./store";
 
@@ -36,28 +38,7 @@ const getWebtoonsRootAndLang = (baseUrl: string): { root: string; lang: string }
   }
 };
 
-export const resolveUrl = (baseUrl: string, value?: string): string => {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-
-  const originMatch = String(baseUrl).match(/^https?:\/\/[^/]+/i);
-  const origin = originMatch ? originMatch[0] : "";
-  const normalizedBase = String(baseUrl).replace(/\/+$/, "");
-
-  if (raw.startsWith("//")) {
-    const proto = origin.startsWith("https://") ? "https:" : "http:";
-    return `${proto}${raw}`;
-  }
-  if (raw.startsWith("/")) {
-    return origin ? `${origin}${raw}` : raw;
-  }
-  if (raw.startsWith("./")) {
-    return `${normalizedBase}/${raw.slice(2)}`;
-  }
-
-  return `${normalizedBase}/${raw}`;
-};
+// resolveUrl, normalizeText and imageFromElement are provided by src/runners/common
 
 export type RuntimeRequestOptions = {
   cookie?: string;
@@ -158,11 +139,7 @@ const normalizeWebtoonsContentUrl = (baseUrl: string, href: string): string => {
 
 export type WebtoonsDirectoryItem = { id: string; title: string; cover: string };
 
-const extractQueryNumber = (urlLike: string, key: string): string => {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = String(urlLike).match(new RegExp(`[?&]${escaped}=(\\d+)`, "i"));
-  return match ? match[1] : "";
-};
+// extractQueryNumber provided by common/url.ts
 
 type EpisodeListResponse = {
   result?: {
@@ -370,19 +347,7 @@ const extractEpisodeNumberFromUrl = (urlLike: string): number | null => {
   return null;
 };
 
-const normalizeViewerLink = (urlLike: string): string => {
-  const raw = String(urlLike ?? "").trim();
-  if (!raw) return "";
-  try {
-    const url = new URL(raw);
-    if (/^m\.webtoons\.com$/i.test(url.hostname)) {
-      url.hostname = "www.webtoons.com";
-    }
-    return url.toString();
-  } catch {
-    return raw;
-  }
-};
+// normalizeViewerUrl provided by common/url.ts
 
 export const parseWebtoonsChaptersFromHtml = (
   html: string,
@@ -422,7 +387,7 @@ export const parseWebtoonsChaptersFromHtml = (
       })();
     if (!title) continue;
 
-    const absolute = normalizeViewerLink(resolveUrl(baseUrl, href));
+    const absolute = normalizeViewerUrl(resolveUrl(baseUrl, href));
     if (!absolute || seen.has(absolute)) continue;
     seen.add(absolute);
 
@@ -455,7 +420,7 @@ export const parseWebtoonsChapters = (
     const episodes = data.result?.episodeList || [];
     const parsed = episodes
       .map((ep, index) => {
-        const chapterId = normalizeViewerLink(ep.viewerLink);
+        const chapterId = normalizeViewerUrl(ep.viewerLink);
         if (!chapterId) return null;
         const episodeNumber = extractEpisodeNumberFromUrl(chapterId);
         const match = parseEpisodeTitle(ep.episodeTitle, index);
@@ -484,19 +449,7 @@ export const parseWebtoonsChapters = (
   }
 };
 
-const normalizeViewerUrl = (baseUrl: string, value?: string): string => {
-  const absolute = resolveUrl(baseUrl, value);
-  if (!absolute || absolute === "#") return "";
-  try {
-    const parsed = new URL(absolute);
-    if (/^m\.webtoons\.com$/i.test(parsed.hostname)) {
-      parsed.hostname = "www.webtoons.com";
-    }
-    return parsed.toString();
-  } catch {
-    return "";
-  }
-};
+// normalizeViewerUrl provided by common/url.ts
 
 export const parseWebtoonsViewerNavigation = (
   html: string,

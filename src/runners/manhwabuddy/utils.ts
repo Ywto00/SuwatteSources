@@ -5,6 +5,8 @@
 import * as Cheerio from "cheerio";
 import { PublicationStatus } from "@suwatte/daisuke";
 import { ManhwaBuddyDirectoryItem } from "./types";
+import { resolveUrl, normalizeText, imageFromElement } from "../../common";
+export { resolveUrl, normalizeText, imageFromElement } from "../../common";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -86,28 +88,7 @@ const parseChapterNumber = (title: string): number | undefined => {
   return Number.isFinite(value) ? value : undefined;
 };
 
-export const resolveUrl = (baseUrl: string, value?: string): string => {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-
-  const originMatch = String(baseUrl).match(/^https?:\/\/[^/]+/i);
-  const origin = originMatch ? originMatch[0] : "";
-  const normalizedBase = String(baseUrl).replace(/\/+$/, "");
-
-  if (raw.startsWith("//")) {
-    const proto = origin.startsWith("https://") ? "https:" : "http:";
-    return `${proto}${raw}`;
-  }
-  if (raw.startsWith("/")) {
-    return origin ? `${origin}${raw}` : raw;
-  }
-  if (raw.startsWith("./")) {
-    return `${normalizedBase}/${raw.slice(2)}`;
-  }
-
-  return `${normalizedBase}/${raw}`;
-};
+// Use shared resolveUrl from src/runners/common
 
 export type RuntimeRequestOptions = {
   cookie?: string;

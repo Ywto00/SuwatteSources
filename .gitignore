@@ -192,3 +192,7 @@ RunnerREF/
 tachiREF/
 tachiyomiREF/
 RUNNERS_IMPLEMENTATION_SUMMARY.md
+
+# Ignore compiled template artifacts
+src/template/**/*.js
+src/template/**/*.d.ts

@@ -1,0 +1,20 @@
+name: Check source artifacts
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  no-templated-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for compiled artifacts in src/template
+        run: |
+          set -euo pipefail
+          found=$(find src/template -type f \( -name '*.js' -o -name '*.d.ts' \) -print -quit || true)
+          if [ -n "$found" ]; then
+            echo "Compiled artifacts detected in src/template:" >&2
+            find src/template -type f \( -name '*.js' -o -name '*.d.ts' \)
+            exit 1
+          fi
