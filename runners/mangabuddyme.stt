@@ -1,0 +1,1689 @@
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.STTPackage = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Target = void 0;
+const daisuke_1 = require("@suwatte/daisuke");
+const madtheme_1 = require("../../template/madtheme");
+const info = {
+    id: "org.mangabuddyme",
+    name: "MangaBuddyme",
+    version: 1.0,
+    minSupportedAppVersion: "6.0.0",
+    thumbnail: "mangabuddyme.png",
+    website: "https://mangabuddy.me",
+    supportedLanguages: ["en"],
+    rating: daisuke_1.CatalogRating.MIXED,
+};
+const config = {
+    allowsMultipleInstances: true,
+    disableLibraryActions: false,
+    disableTrackerLinking: false,
+    disableChapterDataCaching: false,
+    disableChapterDates: false,
+    disableLanguageFlags: false,
+    disableTagNavigation: false,
+    disableUpdateChecks: false,
+    disableCustomThumbnails: false,
+    disableContentLinking: false,
+    disableMigrationDestination: false,
+    requiresAuthenticationToAccessContent: false,
+};
+const context = {
+    storeKeyPrefix: "mangabuddyme",
+    displayName: "MangaBuddy.me",
+    defaultBaseUrl: "https://mangabuddy.me",
+};
+exports.Target = new madtheme_1.MadThemeTemplate({
+    context,
+    info,
+    config,
+});
+
+},{"../../template/madtheme":3,"@suwatte/daisuke":7}],2:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MadThemeController = void 0;
+const daisuke_1 = require("@suwatte/daisuke");
+const utils_1 = require("./utils");
+const parser_1 = require("./parser");
+const DEFAULT_CHAPTER_SELECTORS = ".chapter-list a[href], #chapter-list a[href], .detail-chlist a[href], .chap-list a[href], .list-chapter a[href], .chapter__list a[href], li.wp-manga-chapter a[href]";
+const DEFAULT_PAGE_SELECTORS = "#chapter-images img, .chapter-image img, .container-chapter-reader img, .chapter-content img, .reading-content img, .page-break img, .viewer img, .image-container img, .manga-page img, .chapter-reader img, img[data-src], img[data-lazy-src], img[data-original], img[data-srcset], img[data-lazy-srcset], img[srcset], img[src]";
+class MadThemeController {
+    ctx;
+    constructor(ctx) {
+        this.ctx = ctx;
+    }
+    key(name) {
+        return `${this.ctx.storeKeyPrefix}_${name}`;
+    }
+    async runtime() {
+        const baseUrl = (await ObjectStore.string(this.key("baseUrl")))?.trim() ||
+            this.ctx.defaultBaseUrl;
+        const cookie = (await ObjectStore.string(this.key("cookie")))?.trim() || "";
+        const userAgent = (await ObjectStore.string(this.key("userAgent")))?.trim() || "";
+        return { baseUrl, cookie, userAgent };
+    }
+    async setSetup(form) {
+        const url = form.baseUrl.trim();
+        if (!url) {
+            throw new Error("Base URL is required");
+        }
+        await ObjectStore.set(this.key("baseUrl"), url);
+        await ObjectStore.set(this.key("cookie"), String(form.cookie ?? "").trim());
+        await ObjectStore.set(this.key("userAgent"), String(form.userAgent ?? "").trim());
+    }
+    async setupMenu() {
+        const runtime = await this.runtime();
+        return {
+            sections: [
+                {
+                    header: `${this.ctx.displayName} Configuration`,
+                    children: [
+                        (0, daisuke_1.UITextField)({
+                            id: "baseUrl",
+                            title: "Base URL",
+                            value: runtime.baseUrl,
+                            placeholder: this.ctx.defaultBaseUrl,
+                        }),
+                        (0, daisuke_1.UITextField)({
+                            id: "cookie",
+                            title: "Cookie (optional)",
+                            value: runtime.cookie,
+                            placeholder: "cf_clearance=...; other_cookie=...",
+                        }),
+                        (0, daisuke_1.UITextField)({
+                            id: "userAgent",
+                            title: "User-Agent (optional)",
+                            value: runtime.userAgent,
+                            placeholder: "Mozilla/5.0 (...)",
+                        }),
+                    ],
+                },
+            ],
+        };
+    }
+    async preferenceMenu() {
+        const runtime = await this.runtime();
+        return {
+            sections: [
+                {
+                    header: `${this.ctx.displayName} Settings`,
+                    footer: "Optional: configure cookie and user-agent for accessing the site.",
+                    children: [
+                        (0, daisuke_1.UITextField)({
+                            id: "cookie",
+                            title: "Cookie",
+                            value: runtime.cookie,
+                            placeholder: "cf_clearance=...; session=...",
+                            didChange: async (value) => {
+                                await ObjectStore.set(this.key("cookie"), value.trim());
+                            },
+                        }),
+                        (0, daisuke_1.UITextField)({
+                            id: "userAgent",
+                            title: "User-Agent",
+                            value: runtime.userAgent,
+                            placeholder: "Mozilla/5.0 (...)",
+                            didChange: async (value) => {
+                                await ObjectStore.set(this.key("userAgent"), value.trim());
+                            },
+                        }),
+                    ],
+                },
+            ],
+        };
+    }
+    async isSetup() {
+        const runtime = await this.runtime();
+        return { state: !!runtime.baseUrl };
+    }
+    async getDirectory(request) {
+        const runtime = await this.runtime();
+        const query = request.query?.trim();
+        const page = request.page ?? 1;
+        let items = [];
+        let lastError;
+        if (query) {
+            const searchUrls = this.ctx.buildSearchUrl
+                ? [this.ctx.buildSearchUrl(runtime.baseUrl, query, page)]
+                : (0, utils_1.buildSearchUrls)(runtime.baseUrl, query);
+            for (const target of searchUrls) {
+                try {
+                    const html = await (0, utils_1.requestHtml)(target, runtime.baseUrl, runtime);
+                    items = (0, parser_1.parseDirectory)(html, runtime.baseUrl).map((item) => ({
+                        id: item.id,
+                        title: item.title,
+                        cover: item.cover ?? "",
+                    }));
+                    if (items.length)
+                        break;
+                }
+                catch (error) {
+                    lastError = error;
+                    continue;
+                }
+            }
+        }
+        else {
+            const root = runtime.baseUrl.replace(/\/+$/, "");
+            const defaultCatalogUrls = [
+                `${root}/home`,
+                root,
+                `${root}/popular`,
+                `${root}/latest`,
+            ];
+            const catalogUrls = this.ctx.buildListUrl
+                ? [this.ctx.buildListUrl(runtime.baseUrl, request.listId, page)]
+                : Array.from(new Set(defaultCatalogUrls));
+            for (const target of catalogUrls) {
+                try {
+                    const html = await (0, utils_1.requestHtml)(target, runtime.baseUrl, runtime);
+                    items = (0, parser_1.parseDirectory)(html, runtime.baseUrl).map((item) => ({
+                        id: item.id,
+                        title: item.title,
+                        cover: item.cover ?? "",
+                    }));
+                    if (items.length)
+                        break;
+                }
+                catch (error) {
+                    lastError = error;
+                    continue;
+                }
+            }
+        }
+        if (!items.length && lastError) {
+            throw lastError instanceof Error
+                ? lastError
+                : new Error(`Failed to fetch ${this.ctx.displayName} directory.`);
+        }
+        return {
+            results: items,
+            isLastPage: true,
+        };
+    }
+    async getDirectoryConfig() {
+        return { searchable: true };
+    }
+    async getContent(contentId) {
+        const runtime = await this.runtime();
+        const url = (0, utils_1.resolveUrl)(runtime.baseUrl, contentId);
+        const html = await (0, utils_1.requestHtml)(url, runtime.baseUrl, runtime);
+        const parsed = (0, parser_1.parseContent)(html, runtime.baseUrl, contentId);
+        const creators = parsed.authors ?? [];
+        const properties = parsed.genres && parsed.genres.length
+            ? (() => {
+                const clean = (s) => s.replace(/,/g, "").replace(/\s+/g, " ").trim();
+                return [
+                    {
+                        id: "genres",
+                        title: "Genres",
+                        tags: parsed.genres.map((g) => {
+                            const t = clean(g);
+                            return { id: t.toLowerCase().replace(/\s+/g, "-"), title: t };
+                        }),
+                    },
+                ];
+            })()
+            : undefined;
+        return {
+            title: parsed.title,
+            cover: parsed.cover,
+            summary: parsed.summary,
+            webUrl: url,
+            status: parsed.status,
+            creators: creators.length ? creators : undefined,
+            info: creators.length ? creators : undefined,
+            properties,
+        };
+    }
+    async getChapters(contentId) {
+        const runtime = await this.runtime();
+        const url = (0, utils_1.resolveUrl)(runtime.baseUrl, contentId);
+        const html = await (0, utils_1.requestHtml)(url, runtime.baseUrl, runtime);
+        const { bookId, bookSlug } = (0, parser_1.extractBookIdAndSlug)(html);
+        const chapterSelectors = this.ctx.chapterSelectors ?? DEFAULT_CHAPTER_SELECTORS;
+        let chapters = (0, parser_1.parseChapters)(html, chapterSelectors);
+        const showMoreChapters = html.includes("getChapters()") && !!bookId && !!bookSlug;
+        if (showMoreChapters && bookId) {
+            try {
+                const apiUrl = `${runtime.baseUrl}/api/manga/${bookId}/chapters?source=detail`;
+                const apiHtml = await (0, utils_1.requestHtml)(apiUrl, runtime.baseUrl, runtime);
+                const apiChapters = (0, parser_1.parseChapters)(apiHtml, chapterSelectors);
+                const current = new Set(chapters.map((c) => c.chapterId));
+                const merged = apiChapters.filter((c) => !current.has(c.chapterId));
+                chapters = [...chapters, ...merged];
+            }
+            catch {
+                // Keep HTML chapter list when API is unavailable.
+            }
+        }
+        // Keep original site order and deduplicate by chapterId.
+        const seenChapterIds = new Set();
+        chapters = chapters
+            .filter((chapter) => {
+            if (!chapter.chapterId || seenChapterIds.has(chapter.chapterId)) {
+                return false;
+            }
+            seenChapterIds.add(chapter.chapterId);
+            return true;
+        })
+            .map((chapter, index) => ({ ...chapter, index }));
+        return chapters.map((chapter) => ({
+            chapterId: chapter.chapterId,
+            title: chapter.title,
+            index: chapter.index,
+            // Preserve parsed chapter numbers (e.g. 228, 202.5) while keeping site order by index.
+            number: chapter.number,
+            date: chapter.date,
+            language: daisuke_1.DefinedLanguages.UNIVERSAL,
+        }));
+    }
+    async getChapterData(_contentId, chapterId) {
+        const runtime = await this.runtime();
+        const chapterUrl = (0, utils_1.resolveUrl)(runtime.baseUrl, chapterId);
+        const html = await (0, utils_1.requestHtml)(chapterUrl, runtime.baseUrl, runtime);
+        const pageSelectors = this.ctx.pageSelectors ?? DEFAULT_PAGE_SELECTORS;
+        let pages = (0, parser_1.parsePages)(html, runtime.baseUrl, pageSelectors);
+        const chapterIdMatch = html.match(/chapterId\s*[=:]\s*["']?(\d+)["']?/);
+        if (chapterIdMatch?.[1]) {
+            try {
+                const apiUrl = `${runtime.baseUrl}/service/backend/chapterServer/?server_id=1&chapter_id=${chapterIdMatch[1]}`;
+                const headers = {
+                    "User-Agent": runtime.userAgent || "",
+                    Referer: runtime.baseUrl,
+                };
+                if (runtime.cookie) {
+                    headers.Cookie = runtime.cookie;
+                }
+                const apiResponse = await new NetworkClient().request({
+                    url: apiUrl,
+                    method: "GET",
+                    headers,
+                });
+                const apiHtml = typeof apiResponse.data === "string"
+                    ? apiResponse.data
+                    : JSON.stringify(apiResponse.data);
+                const apiPages = (0, parser_1.parsePages)(apiHtml, runtime.baseUrl, pageSelectors);
+                // Keep the most complete source; some endpoints return partial pages.
+                if (apiPages.length > pages.length) {
+                    pages = apiPages;
+                }
+            }
+            catch {
+                // Keep HTML pages when API is unavailable.
+            }
+        }
+        // Fallback for chapter pages split as /page-1, /page-2, ...
+        // Some sources only embed part of the images in each paginated subpage.
+        const pagedLinks = Array.from(new Set(Array.from(html.matchAll(/href=["']([^"']*\/page-\d+)["']/gi), (m) => String(m[1] ?? "").trim()).filter(Boolean)));
+        if (pagedLinks.length) {
+            const mergedPages = new Set(pages);
+            const taskFuncs = pagedLinks.map((link) => async () => {
+                try {
+                    const pageUrl = (0, utils_1.resolveUrl)(runtime.baseUrl, link);
+                    const pageHtml = await (0, utils_1.requestHtml)(pageUrl, runtime.baseUrl, runtime);
+                    return (0, parser_1.parsePages)(pageHtml, runtime.baseUrl, pageSelectors);
+                }
+                catch {
+                    return [];
+                }
+            });
+            // Run paginated subpage fetches in small batches to avoid large parallel spikes.
+            const BATCH_SIZE = 4;
+            for (let i = 0; i < taskFuncs.length; i += BATCH_SIZE) {
+                const batch = taskFuncs.slice(i, i + BATCH_SIZE).map((fn) => fn());
+                const results = await Promise.all(batch);
+                for (const part of results) {
+                    for (const p of part) {
+                        if (p && p.startsWith("http"))
+                            mergedPages.add(p);
+                    }
+                }
+            }
+            pages = Array.from(mergedPages);
+        }
+        const uniquePages = [...new Set(pages.filter((p) => p && p.startsWith("http")))];
+        const chapterPages = uniquePages.map((url) => ({ url }));
+        if (!chapterPages.length) {
+            throw new Error("No pages found. The site structure may have changed.");
+        }
+        // Best-effort prefetch: warm next chapter HTML/pages in background when available.
+        const nextHrefMatch = html.match(/id=["']btn-next["'][^>]*href=["']([^"']+)["']/i);
+        const nextHref = String(nextHrefMatch?.[1] ?? "").trim();
+        if (nextHref && nextHref !== "#") {
+            void (async () => {
+                try {
+                    const nextUrl = (0, utils_1.resolveUrl)(runtime.baseUrl, nextHref);
+                    const nextHtml = await (0, utils_1.requestHtml)(nextUrl, runtime.baseUrl, runtime);
+                    // Parse once to warm request path/cache without impacting current chapter latency.
+                    (0, parser_1.parsePages)(nextHtml, runtime.baseUrl, pageSelectors);
+                }
+                catch {
+                    // Ignore prefetch errors.
+                }
+            })();
+        }
+        return { pages: chapterPages };
+    }
+    async willRequestImage(url) {
+        const runtime = await this.runtime();
+        const headers = {
+            Accept: "image/*",
+            Referer: runtime.baseUrl,
+        };
+        if (runtime.userAgent) {
+            headers["User-Agent"] = runtime.userAgent;
+        }
+        if (runtime.cookie) {
+            headers.Cookie = runtime.cookie;
+        }
+        return { url, headers };
+    }
+}
+exports.MadThemeController = MadThemeController;
+
+},{"./parser":4,"./utils":6,"@suwatte/daisuke":7}],3:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MadThemeTemplate = void 0;
+const controller_1 = require("./controller");
+class MadThemeTemplate {
+    info;
+    config;
+    controller;
+    constructor(conf) {
+        this.info = conf.info;
+        this.config = conf.config;
+        this.controller = new controller_1.MadThemeController(conf.context);
+    }
+    async getContent(contentId) {
+        return this.controller.getContent(contentId);
+    }
+    async getChapters(contentId) {
+        return this.controller.getChapters(contentId);
+    }
+    async getChapterData(contentId, chapterId) {
+        return this.controller.getChapterData(contentId, chapterId);
+    }
+    async getDirectory(request) {
+        return this.controller.getDirectory(request);
+    }
+    async getDirectoryConfig(_configID) {
+        return this.controller.getDirectoryConfig();
+    }
+    async willRequestImage(url) {
+        return this.controller.willRequestImage(url);
+    }
+    async getPreferenceMenu() {
+        return this.controller.preferenceMenu();
+    }
+    async getSetupMenu() {
+        return this.controller.setupMenu();
+    }
+    async validateSetupForm(form) {
+        return this.controller.setSetup(form);
+    }
+    async isRunnerSetup() {
+        return this.controller.isSetup();
+    }
+}
+exports.MadThemeTemplate = MadThemeTemplate;
+__exportStar(require("./types"), exports);
+
+},{"./controller":2,"./types":5}],4:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parsePages = exports.parseChapters = exports.extractBookIdAndSlug = exports.parseContent = exports.parseDirectory = void 0;
+const daisuke_1 = require("@suwatte/daisuke");
+const Cheerio = __importStar(require("cheerio"));
+const utils_1 = require("./utils");
+const parseDirectory = (html, baseUrl) => {
+    const $ = Cheerio.load(html);
+    const cards = [
+        ".book-item",
+        ".page-item-detail",
+        ".listupd .bs .bsx",
+        "div.bsx",
+        ".card-item",
+    ];
+    const out = [];
+    for (const selector of cards) {
+        for (const node of $(selector).toArray()) {
+            const $node = $(node);
+            const href = (0, utils_1.pick)($node, ["a[href*='/manga/']"], "href") ||
+                (0, utils_1.pick)($node, ["a[href]"], "href");
+            const title = (0, utils_1.pick)($node, [".book-title", ".tt", "h3", "a[title]"]) ||
+                (0, utils_1.pick)($node, ["img[alt]"], "alt");
+            const cover = (0, utils_1.pick)($node, ["img[data-src]"], "data-src") ||
+                (0, utils_1.pick)($node, ["img[data-lazy-src]"], "data-lazy-src") ||
+                (0, utils_1.firstSrcCandidate)((0, utils_1.pick)($node, ["img[data-lazy-srcset]"], "data-lazy-srcset")) ||
+                (0, utils_1.firstSrcCandidate)((0, utils_1.pick)($node, ["img[srcset]"], "srcset")) ||
+                (0, utils_1.pick)($node, ["img[src]"], "src");
+            if (!href || !title)
+                continue;
+            out.push({
+                id: (0, utils_1.normalizeSeriesHref)(baseUrl, href),
+                title,
+                cover: (0, utils_1.resolveUrl)(baseUrl, cover),
+            });
+            if (out.length >= 60)
+                return out;
+        }
+        if (out.length)
+            return out;
+    }
+    for (const node of $("a[href*='/manga/']").toArray()) {
+        const $node = $(node);
+        const href = String($node.attr("href") ?? "").trim();
+        const title = String($node.attr("title") ?? "").trim() ||
+            String($node.text() ?? "").trim() ||
+            String($node.find("img").attr("alt") ?? "").trim();
+        const cover = String($node.find("img").attr("data-src") ?? "").trim() ||
+            String($node.find("img").attr("data-lazy-src") ?? "").trim() ||
+            (0, utils_1.firstSrcCandidate)(String($node.find("img").attr("data-lazy-srcset") ?? "").trim()) ||
+            (0, utils_1.firstSrcCandidate)(String($node.find("img").attr("srcset") ?? "").trim()) ||
+            String($node.find("img").attr("src") ?? "").trim();
+        if (!href || !title)
+            continue;
+        out.push({
+            id: (0, utils_1.normalizeSeriesHref)(baseUrl, href),
+            title,
+            cover: (0, utils_1.resolveUrl)(baseUrl, cover),
+        });
+        if (out.length >= 60)
+            break;
+    }
+    return out;
+};
+exports.parseDirectory = parseDirectory;
+const parseContent = (html, baseUrl, contentId) => {
+    const $ = Cheerio.load(html);
+    const root = $.root();
+    const title = (0, utils_1.pick)(root, [".post-title h1", "h1.entry-title", "h1"]) ||
+        `Manga ${contentId}`;
+    const cover = (0, utils_1.pick)(root, [".img-cover img"], "data-src") ||
+        (0, utils_1.pick)(root, [".img-cover img"], "data-lazy-src") ||
+        (0, utils_1.pick)(root, [".img-cover img"], "src") ||
+        (0, utils_1.pick)(root, [".summary_image img"], "data-src") ||
+        (0, utils_1.pick)(root, [".summary_image img"], "data-lazy-src") ||
+        (0, utils_1.pick)(root, [".summary_image img"], "src") ||
+        (0, utils_1.pick)(root, [".info-image img"], "data-src") ||
+        (0, utils_1.pick)(root, [".info-image img"], "src") ||
+        (0, utils_1.pick)(root, [".thumb img"], "data-src") ||
+        (0, utils_1.pick)(root, [".thumb img"], "src") ||
+        (0, utils_1.pick)(root, ["meta[property='og:image']"], "content");
+    const summaryNodes = root.find(".content, .content p, .summary__content, .description-summary, .summary-content, .summary, .entry-content p");
+    const summary = summaryNodes.length
+        ? summaryNodes.first().text().trim()
+        : (0, utils_1.pick)(root, ["meta[name='description']"], "content") || "No summary";
+    const authors = root
+        .find(".author-content a, .author_list a, .meta .author a")
+        .map((_, el) => $(el).text().trim())
+        .get()
+        .filter(Boolean);
+    // Fallback: parse .meta.box structure like the example HTML
+    if ((!authors || !authors.length) && root.find(".meta.box").length) {
+        const meta = root.find(".meta.box");
+        const authorNode = meta
+            .find("p")
+            .filter((_, el) => $(el).text().toLowerCase().includes("authors"))
+            .first();
+        if (authorNode.length) {
+            const list = $(authorNode).find("a").map((_, a) => $(a).text().trim()).get().filter(Boolean);
+            if (list.length)
+                authors.push(...list);
+        }
+    }
+    let statusText = (0, utils_1.pick)(root, [".status, .meta .status, .manga-info .status"]) + " " + summary;
+    if (root.find(".meta.box").length) {
+        const meta = root.find(".meta.box");
+        const statusNode = meta
+            .find("p")
+            .filter((_, el) => $(el).text().toLowerCase().includes("status"))
+            .first();
+        if (statusNode.length) {
+            const s = $(statusNode).text().replace(/\s+/g, " ").trim();
+            if (s)
+                statusText = s + " " + statusText;
+        }
+    }
+    let status;
+    if (/ONGOING|UP|EVERY|WEEKLY/.test(statusText.toUpperCase())) {
+        status = daisuke_1.PublicationStatus.ONGOING;
+    }
+    else if (/COMPLETED|END|FINISHED/.test(statusText.toUpperCase())) {
+        status = daisuke_1.PublicationStatus.COMPLETED;
+    }
+    // Extract genres if present in .meta.box
+    let genres;
+    if (root.find(".meta.box").length) {
+        const meta = root.find(".meta.box");
+        const genresNode = meta
+            .find("p")
+            .filter((_, el) => $(el).text().toLowerCase().includes("genres"))
+            .first();
+        if (genresNode.length) {
+            const g = $(genresNode).find("a").map((_, a) => $(a).text().trim()).get().filter(Boolean);
+            if (g.length)
+                genres = g;
+        }
+    }
+    return {
+        title,
+        cover: (0, utils_1.resolveUrl)(baseUrl, cover),
+        summary,
+        authors: authors.length ? authors : undefined,
+        status,
+        genres,
+    };
+};
+exports.parseContent = parseContent;
+const extractBookIdAndSlug = (html) => {
+    const bookIdMatch = html.match(/bookId\s*[=:]\s*["']?(\d+)["']?/);
+    const bookSlugMatch = html.match(/bookSlug\s*[=:]\s*["']([^"']+)["']/);
+    return {
+        bookId: bookIdMatch ? bookIdMatch[1] : undefined,
+        bookSlug: bookSlugMatch ? bookSlugMatch[1] : undefined,
+    };
+};
+exports.extractBookIdAndSlug = extractBookIdAndSlug;
+const parseChapters = (html, chapterSelectors) => {
+    const $ = Cheerio.load(html);
+    const rows = $(chapterSelectors).toArray();
+    const normalizeChapterTitle = (value) => {
+        return value
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .replace(/\s*:\s*/g, ": ")
+            .replace(/\s*\.\s*/g, ".")
+            .replace(/\s*,\s*/g, ", ")
+            .trim();
+    };
+    const out = [];
+    const parseChapterNumber = (title, href) => {
+        const titleMatch = title.match(/(\d+(?:\.\d+)?)/);
+        if (titleMatch)
+            return Number(titleMatch[1]);
+        const hrefLower = href.toLowerCase();
+        const hrefDecimal = hrefLower.match(/chapter[-_/](\d+)[-.](\d+)/i);
+        if (hrefDecimal) {
+            return Number(`${hrefDecimal[1]}.${hrefDecimal[2]}`);
+        }
+        const hrefMatch = hrefLower.match(/chapter[-_/](\d+(?:\.\d+)?)/i);
+        if (hrefMatch)
+            return Number(hrefMatch[1]);
+        const low = title.toLowerCase();
+        if (/(bonus|extra|special|oneshot|one-shot)/.test(low) || /bonus|extra|special|oneshot|one-shot/.test(hrefLower)) {
+            return 0;
+        }
+        // Avoid inflated fallback numbers (e.g. 122) which break next/prev navigation.
+        return 0;
+    };
+    for (let i = 0; i < rows.length; i++) {
+        const node = rows[i];
+        const $node = $(node);
+        const href = (0, utils_1.pick)($node, ["a[href]"], "href") || String($node.attr("href") ?? "").trim();
+        const rawTitle = $node.find(".chapter-name, .chapter-title, .title, span").first().text().trim() ||
+            $node.text().replace(/\s+/g, " ").trim();
+        const title = normalizeChapterTitle(rawTitle);
+        const dateText = $node
+            .find(".ct-update, .chapter-update, .date, .chapter-date, .update, time")
+            .first()
+            .text()
+            .trim() ||
+            $node
+                .find(".ct-update, .chapter-update, .date, .chapter-date, .update, time")
+                .first()
+                .attr("title") ||
+            "";
+        if (!href || !title)
+            continue;
+        let chapterId = href;
+        if (/^https?:\/\//i.test(href)) {
+            try {
+                const url = new URL(href);
+                // Use only pathname (no query) so chapter IDs are stable and do not include search params
+                chapterId = url.pathname.replace(/\/+$/, "");
+            }
+            catch {
+                chapterId = href.split(/[?#]/)[0];
+            }
+        }
+        const number = parseChapterNumber(title, href);
+        const date = (0, utils_1.parseChapterDate)(dateText);
+        out.push({ chapterId, title, index: i, number, date });
+    }
+    // Keep chapter order exactly as provided by the site.
+    return out.map((item, idx) => ({ ...item, index: idx }));
+};
+exports.parseChapters = parseChapters;
+const parsePages = (html, baseUrl, pageSelectors) => {
+    const $ = Cheerio.load(html);
+    const out = [];
+    const seen = new Set();
+    const isPlaceholder = (s) => {
+        const low = s.toLowerCase();
+        if (low.startsWith("data:image"))
+            return true;
+        return /placeholder|loading|blank|spinner|lazy/i.test(low);
+    };
+    const pushUrl = (src) => {
+        if (!src)
+            return;
+        if (isPlaceholder(src))
+            return;
+        const fullUrl = (0, utils_1.resolveUrl)(baseUrl, src);
+        if (!/^https?:\/\//i.test(fullUrl))
+            return;
+        if (seen.has(fullUrl))
+            return;
+        seen.add(fullUrl);
+        out.push(fullUrl);
+    };
+    // Priority path: parse from the exact chapter container in DOM order.
+    const chapterContainer = $("#chapter-images").first();
+    const chapterNodes = chapterContainer.length
+        ? chapterContainer.find(".chapter-image img").toArray()
+        : [];
+    const nodes = chapterNodes.length ? chapterNodes : $(pageSelectors).toArray();
+    for (const node of nodes) {
+        const $node = $(node);
+        const src = String($node.attr("data-src") ?? "").trim() ||
+            String($node.attr("data-lazy-src") ?? "").trim() ||
+            String($node.attr("data-original") ?? "").trim() ||
+            String($node.attr("data-url") ?? "").trim() ||
+            (0, utils_1.firstSrcCandidate)(String($node.attr("data-srcset") ?? "")) ||
+            (0, utils_1.firstSrcCandidate)(String($node.attr("data-lazy-srcset") ?? "")) ||
+            (0, utils_1.firstSrcCandidate)(String($node.attr("srcset") ?? "")) ||
+            String($node.attr("src") ?? "").trim();
+        pushUrl(src);
+    }
+    // If the site lazy-loads with delays, infer expected page count from "Loading x/y".
+    let expectedTotal = 0;
+    if (chapterContainer.length) {
+        for (const span of chapterContainer.find(".chapter-image span").toArray()) {
+            const t = String($(span).text() ?? "").replace(/\u00a0/g, " ");
+            const m = t.match(/(\d+)\s*\/\s*(\d+)/);
+            if (!m)
+                continue;
+            const total = Number(m[2]);
+            if (Number.isFinite(total) && total > expectedTotal)
+                expectedTotal = total;
+        }
+    }
+    // Strong fallback used by MangaBuddy chapter pages.
+    // Example: var chapImages = "url1,url2,...";
+    const chapImagesMatch = html.match(/var\s+chapImages\s*=\s*["']([^"']+)["']/i);
+    if (chapImagesMatch?.[1]) {
+        const list = chapImagesMatch[1]
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        for (const item of list) {
+            pushUrl(item);
+            if (expectedTotal > 0 && out.length >= expectedTotal)
+                break;
+            if (out.length >= 300)
+                break;
+        }
+    }
+    // Fallback within the exact chapter container only, so ad blocks outside do not pollute.
+    if (chapterContainer.length && expectedTotal > 0 && out.length < expectedTotal) {
+        const source = String(chapterContainer.html() ?? "").replace(/\\\//g, "/");
+        const regex = /(https?:\/\/[^\"'\s>]+\.(?:jpg|jpeg|png|webp|gif|webm))(?:\?[^\"'\s>]*)?/gi;
+        let match;
+        while ((match = regex.exec(source)) !== null) {
+            const img = String(match[1] ?? "").trim();
+            pushUrl(img);
+            if (out.length >= expectedTotal)
+                break;
+        }
+    }
+    if (!out.length) {
+        const source = html.replace(/\\\//g, "/");
+        const regex = /(https?:\/\/[^\"'\s>]+\.(?:jpg|jpeg|png|webp|gif|webm))(?:\?[^\"'\s>]*)?/gi;
+        let match;
+        while ((match = regex.exec(source)) !== null) {
+            const img = String(match[1] ?? "").trim();
+            pushUrl(img);
+            if (out.length >= 300)
+                break;
+        }
+    }
+    return out;
+};
+exports.parsePages = parsePages;
+
+},{"./utils":6,"@suwatte/daisuke":7,"cheerio":undefined}],5:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+
+},{}],6:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseChapterDate = exports.buildSearchUrls = exports.requestHtml = exports.pick = exports.normalizeSeriesHref = exports.resolveUrl = exports.firstSrcCandidate = void 0;
+const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const firstSrcCandidate = (value) => {
+    const raw = String(value ?? "").trim();
+    if (!raw)
+        return "";
+    if (!raw.includes(",")) {
+        return raw.split(/\s+/)[0] ?? "";
+    }
+    const first = raw.split(",")[0] ?? "";
+    return first.trim().split(/\s+/)[0] ?? "";
+};
+exports.firstSrcCandidate = firstSrcCandidate;
+const resolveUrl = (baseUrl, value) => {
+    const raw = String(value ?? "").trim();
+    if (!raw)
+        return "";
+    if (/^https?:\/\//i.test(raw))
+        return raw;
+    const originMatch = String(baseUrl).match(/^https?:\/\/[^/]+/i);
+    const origin = originMatch ? originMatch[0] : "";
+    const normalizedBase = String(baseUrl).replace(/\/+$/, "");
+    if (raw.startsWith("//")) {
+        const proto = origin.startsWith("https://") ? "https:" : "http:";
+        return `${proto}${raw}`;
+    }
+    if (raw.startsWith("/")) {
+        return origin ? `${origin}${raw}` : raw;
+    }
+    if (raw.startsWith("./")) {
+        return `${normalizedBase}/${raw.slice(2)}`;
+    }
+    return `${normalizedBase}/${raw}`;
+};
+exports.resolveUrl = resolveUrl;
+const normalizeSeriesHref = (baseUrl, href) => {
+    const absolute = (0, exports.resolveUrl)(baseUrl, href);
+    try {
+        const u = new URL(absolute);
+        const parts = u.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+        if (parts.length >= 2 && parts[0].toLowerCase() === "manga") {
+            return `${u.origin}/${parts[1]}`;
+        }
+        // Remove query and fragment for consistent IDs (e.g. /list?title_no=123)
+        const cleanPath = u.pathname.replace(/\/+$/, "");
+        return `${u.origin}${cleanPath}`;
+    }
+    catch {
+        return absolute.split(/[?#]/)[0];
+    }
+};
+exports.normalizeSeriesHref = normalizeSeriesHref;
+const pick = ($root, selectors, attr) => {
+    for (const selector of selectors) {
+        const node = $root.find(selector).first();
+        if (!node.length)
+            continue;
+        const raw = attr ? node.attr(attr) : node.text();
+        const value = String(raw ?? "").trim();
+        if (value)
+            return value;
+    }
+    return "";
+};
+exports.pick = pick;
+const requestHtml = async (url, baseUrl, opts = {}) => {
+    const originMatch = String(baseUrl).match(/^https?:\/\/[^/]+/i);
+    const origin = originMatch ? originMatch[0] : "";
+    const headers = {
+        "User-Agent": opts.userAgent || DEFAULT_UA,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        Referer: baseUrl,
+        Origin: origin,
+    };
+    if (opts.cookie) {
+        headers.Cookie = opts.cookie;
+    }
+    const response = await new NetworkClient().request({
+        url,
+        method: "GET",
+        headers,
+    });
+    const html = typeof response.data === "string"
+        ? response.data
+        : JSON.stringify(response.data);
+    const lower = html.toLowerCase();
+    if (lower.includes("checking your browser") ||
+        lower.includes("cf-browser-verification") ||
+        lower.includes("attention required")) {
+        throw new Error("Blocked by anti-bot challenge. Set a valid cookie in runner preferences and retry.");
+    }
+    return html;
+};
+exports.requestHtml = requestHtml;
+const buildSearchUrls = (baseUrl, query) => {
+    const root = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+    const q = encodeURIComponent(query);
+    return [
+        `${root}/search?q=${q}`,
+        `${root}/search?status=all&sort=views&q=${q}`,
+        `${root}/search?keyword=${q}`,
+        `${root}/search?s=${q}`,
+    ];
+};
+exports.buildSearchUrls = buildSearchUrls;
+const parseChapterDate = (value) => {
+    const text = value.trim();
+    if (!text)
+        return new Date(0);
+    const ms = Number(text);
+    if (Number.isFinite(ms) && ms > 0)
+        return new Date(ms);
+    const parsed = Date.parse(text);
+    if (!Number.isNaN(parsed))
+        return new Date(parsed);
+    const match = text.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);
+    if (match) {
+        const amount = parseInt(match[1], 10);
+        const unit = match[2].toLowerCase();
+        const date = new Date();
+        switch (unit) {
+            case "second":
+                date.setSeconds(date.getSeconds() - amount);
+                break;
+            case "minute":
+                date.setMinutes(date.getMinutes() - amount);
+                break;
+            case "hour":
+                date.setHours(date.getHours() - amount);
+                break;
+            case "day":
+                date.setDate(date.getDate() - amount);
+                break;
+            case "week":
+                date.setDate(date.getDate() - amount * 7);
+                break;
+            case "month":
+                date.setMonth(date.getMonth() - amount);
+                break;
+            case "year":
+                date.setFullYear(date.getFullYear() - amount);
+                break;
+        }
+        return date;
+    }
+    return new Date(0);
+};
+exports.parseChapterDate = parseChapterDate;
+
+},{}],7:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./runners"), exports);
+__exportStar(require("./types"), exports);
+
+},{"./runners":31,"./types":61}],8:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],9:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],10:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],11:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],12:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],13:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],14:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],15:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],16:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],17:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./ContentEvent"), exports);
+__exportStar(require("./ChapterEvent"), exports);
+__exportStar(require("./ProgressSync"), exports);
+__exportStar(require("./LibrarySync"), exports);
+__exportStar(require("./StreamContextProvider"), exports);
+__exportStar(require("./ContextMenuHandler"), exports);
+__exportStar(require("./GroupedUpdateProvider"), exports);
+__exportStar(require("./ImageRedrawHandler"), exports);
+
+},{"./ChapterEvent":9,"./ContentEvent":10,"./ContextMenuHandler":11,"./GroupedUpdateProvider":12,"./ImageRedrawHandler":13,"./LibrarySync":14,"./ProgressSync":15,"./StreamContextProvider":16}],18:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./handlers"), exports);
+__exportStar(require("./ContentSource"), exports);
+
+},{"./ContentSource":8,"./handlers":17}],19:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],20:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],21:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./ContentTracker"), exports);
+__exportStar(require("./AdvancedTracker"), exports);
+
+},{"./AdvancedTracker":19,"./ContentTracker":20}],22:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BasicAuthenticationUIIdentifier = void 0;
+var BasicAuthenticationUIIdentifier;
+(function (BasicAuthenticationUIIdentifier) {
+    BasicAuthenticationUIIdentifier[BasicAuthenticationUIIdentifier["EMAIL"] = 0] = "EMAIL";
+    BasicAuthenticationUIIdentifier[BasicAuthenticationUIIdentifier["USERNAME"] = 1] = "USERNAME";
+})(BasicAuthenticationUIIdentifier || (exports.BasicAuthenticationUIIdentifier = BasicAuthenticationUIIdentifier = {}));
+
+},{}],23:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],24:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],25:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],26:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],27:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],28:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],29:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Authentication"), exports);
+__exportStar(require("./Preferences"), exports);
+__exportStar(require("./ImageRequest"), exports);
+__exportStar(require("./DirectoryHandler"), exports);
+__exportStar(require("./PageProvider"), exports);
+__exportStar(require("./Setup"), exports);
+__exportStar(require("./PageResolver"), exports);
+
+},{"./Authentication":22,"./DirectoryHandler":23,"./ImageRequest":24,"./PageProvider":25,"./PageResolver":26,"./Preferences":27,"./Setup":28}],30:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RunnerEnvironment = void 0;
+__exportStar(require("./extensions"), exports);
+var RunnerEnvironment;
+(function (RunnerEnvironment) {
+    RunnerEnvironment[RunnerEnvironment["SOURCE"] = 0] = "SOURCE";
+    RunnerEnvironment[RunnerEnvironment["TRACKER"] = 1] = "TRACKER";
+})(RunnerEnvironment || (exports.RunnerEnvironment = RunnerEnvironment = {}));
+
+},{"./extensions":29}],31:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./ContentSource"), exports);
+__exportStar(require("./Runner"), exports);
+__exportStar(require("./ContentTracker"), exports);
+
+},{"./ContentSource":18,"./ContentTracker":21,"./Runner":30}],32:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],33:[function(require,module,exports){
+"use strict";
+// Picker
+Object.defineProperty(exports, "__esModule", { value: true });
+
+},{}],34:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.UIStepper = exports.UIButton = exports.UIDatePicker = exports.UITextField = exports.UIToggle = exports.UIMultiPicker = exports.UIPicker = void 0;
+const UIElements_1 = require("./UIElements");
+const UIPicker = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.SELECT }));
+exports.UIPicker = UIPicker;
+const UIMultiPicker = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.MULTISELECT }));
+exports.UIMultiPicker = UIMultiPicker;
+const UIToggle = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.TOGGLE }));
+exports.UIToggle = UIToggle;
+const UITextField = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.TEXTFIELD }));
+exports.UITextField = UITextField;
+const UIDatePicker = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.DATEPICKER }));
+exports.UIDatePicker = UIDatePicker;
+const UIButton = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.BUTTON }));
+exports.UIButton = UIButton;
+const UIStepper = (props) => (Object.assign(Object.assign({}, props), { type: UIElements_1.UIComponentType.STEPPER }));
+exports.UIStepper = UIStepper;
+
+},{"./UIElements":35}],35:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.UIComponentType = void 0;
+var UIComponentType;
+(function (UIComponentType) {
+    UIComponentType[UIComponentType["SELECT"] = 0] = "SELECT";
+    UIComponentType[UIComponentType["MULTISELECT"] = 1] = "MULTISELECT";
+    UIComponentType[UIComponentType["STEPPER"] = 2] = "STEPPER";
+    UIComponentType[UIComponentType["TOGGLE"] = 3] = "TOGGLE";
+    UIComponentType[UIComponentType["TEXTFIELD"] = 4] = "TEXTFIELD";
+    UIComponentType[UIComponentType["BUTTON"] = 5] = "BUTTON";
+    UIComponentType[UIComponentType["DATEPICKER"] = 6] = "DATEPICKER";
+})(UIComponentType || (exports.UIComponentType = UIComponentType = {}));
+
+},{}],36:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Form"), exports);
+__exportStar(require("./UIElements"), exports);
+__exportStar(require("./UIDefinitions"), exports);
+__exportStar(require("./UIElementBuilders"), exports);
+
+},{"./Form":32,"./UIDefinitions":33,"./UIElementBuilders":34,"./UIElements":35}],37:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],38:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DefinedLanguages = void 0;
+var DefinedLanguages;
+(function (DefinedLanguages) {
+    DefinedLanguages["UNIVERSAL"] = "UNIVERSAL";
+    DefinedLanguages["ENGLISH"] = "en_US";
+    DefinedLanguages["KOREAN"] = "ko_KR";
+    DefinedLanguages["JAPANESE"] = "ja_JP";
+    DefinedLanguages["FRENCH"] = "fr_FR";
+    DefinedLanguages["CHINESE"] = "zh-CN";
+    DefinedLanguages["SPANISH"] = "es_ES";
+    DefinedLanguages["PORTUGUESE"] = "pt_BR";
+})(DefinedLanguages || (exports.DefinedLanguages = DefinedLanguages = {}));
+
+},{}],39:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],40:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],41:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],42:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],43:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],44:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],45:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ContentType = exports.ReadingFlag = exports.ReadingMode = exports.PublicationStatus = void 0;
+// Enums
+var PublicationStatus;
+(function (PublicationStatus) {
+    PublicationStatus[PublicationStatus["ONGOING"] = 1] = "ONGOING";
+    PublicationStatus[PublicationStatus["COMPLETED"] = 2] = "COMPLETED";
+    PublicationStatus[PublicationStatus["CANCELLED"] = 3] = "CANCELLED";
+    PublicationStatus[PublicationStatus["HIATUS"] = 4] = "HIATUS";
+})(PublicationStatus || (exports.PublicationStatus = PublicationStatus = {}));
+/**
+ * The method in which the content can be read
+ */
+var ReadingMode;
+(function (ReadingMode) {
+    ReadingMode[ReadingMode["PAGED_MANGA"] = 0] = "PAGED_MANGA";
+    ReadingMode[ReadingMode["PAGED_COMIC"] = 1] = "PAGED_COMIC";
+    ReadingMode[ReadingMode["PAGED_VERTICAL"] = 2] = "PAGED_VERTICAL";
+    ReadingMode[ReadingMode["WEBTOON"] = 3] = "WEBTOON";
+})(ReadingMode || (exports.ReadingMode = ReadingMode = {}));
+var ReadingFlag;
+(function (ReadingFlag) {
+    ReadingFlag[ReadingFlag["READING"] = 0] = "READING";
+    ReadingFlag[ReadingFlag["PLANNED"] = 1] = "PLANNED";
+    ReadingFlag[ReadingFlag["COMPLETED"] = 2] = "COMPLETED";
+    ReadingFlag[ReadingFlag["DROPPED"] = 3] = "DROPPED";
+    ReadingFlag[ReadingFlag["REREADING"] = 4] = "REREADING";
+    ReadingFlag[ReadingFlag["PAUSED"] = 5] = "PAUSED";
+    ReadingFlag[ReadingFlag["UNKNOWN"] = 6] = "UNKNOWN";
+})(ReadingFlag || (exports.ReadingFlag = ReadingFlag = {}));
+var ContentType;
+(function (ContentType) {
+    ContentType[ContentType["MANGA"] = 0] = "MANGA";
+    ContentType[ContentType["MANHUA"] = 1] = "MANHUA";
+    ContentType[ContentType["MANHWA"] = 2] = "MANHWA";
+    ContentType[ContentType["COMIC"] = 3] = "COMIC";
+    ContentType[ContentType["NOVEL"] = 4] = "NOVEL";
+})(ContentType || (exports.ContentType = ContentType = {}));
+
+},{}],46:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],47:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],48:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],49:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ProviderLinkType = void 0;
+var ProviderLinkType;
+(function (ProviderLinkType) {
+    ProviderLinkType[ProviderLinkType["WEBSITE"] = 0] = "WEBSITE";
+    ProviderLinkType[ProviderLinkType["TWITTER"] = 1] = "TWITTER";
+    ProviderLinkType[ProviderLinkType["DISCORD"] = 2] = "DISCORD";
+    ProviderLinkType[ProviderLinkType["PATREON"] = 3] = "PATREON";
+})(ProviderLinkType || (exports.ProviderLinkType = ProviderLinkType = {}));
+
+},{}],50:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],51:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Content"), exports);
+__exportStar(require("./Highlight"), exports);
+__exportStar(require("./Chapter"), exports);
+__exportStar(require("./ChapterData"), exports);
+__exportStar(require("./Property"), exports);
+__exportStar(require("./Collection"), exports);
+__exportStar(require("./Provider"), exports);
+__exportStar(require("./Enums"), exports);
+__exportStar(require("./ReaderContext"), exports);
+__exportStar(require("./ContextMenu"), exports);
+__exportStar(require("./DeepLinkContext"), exports);
+__exportStar(require("./BooleanState"), exports);
+__exportStar(require("./ContentProgressState"), exports);
+__exportStar(require("./GroupedUpdatesResponse"), exports);
+
+},{"./BooleanState":37,"./Chapter":38,"./ChapterData":39,"./Collection":40,"./Content":41,"./ContentProgressState":42,"./ContextMenu":43,"./DeepLinkContext":44,"./Enums":45,"./GroupedUpdatesResponse":46,"./Highlight":47,"./Property":48,"./Provider":49,"./ReaderContext":50}],52:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AuthMethod = void 0;
+var AuthMethod;
+(function (AuthMethod) {
+    AuthMethod[AuthMethod["USERNAME_PW"] = 0] = "USERNAME_PW";
+    AuthMethod[AuthMethod["EMAIL_PW"] = 1] = "EMAIL_PW";
+    AuthMethod[AuthMethod["WEB"] = 2] = "WEB";
+    AuthMethod[AuthMethod["OAUTH"] = 3] = "OAUTH";
+})(AuthMethod || (exports.AuthMethod = AuthMethod = {}));
+
+},{}],53:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],54:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],55:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CatalogRating = void 0;
+var CatalogRating;
+(function (CatalogRating) {
+    /**
+     * Catalog does not contain ANY SUGGESTIVE OR NSFW content
+     */
+    CatalogRating[CatalogRating["SAFE"] = 0] = "SAFE";
+    /**
+     * Catalog may contain SUGGESTIVE OR NSFW content,
+     * runners must hide NSFW content by default,
+     * users will be required to verify they are of age to view NSFW content
+     */
+    CatalogRating[CatalogRating["MIXED"] = 1] = "MIXED";
+    /**
+     * Catalog contains MAINLY SUGGESTIVE OR NSFW content,
+     * users will be required to verify they are of age to view NSFW content
+     */
+    CatalogRating[CatalogRating["NSFW"] = 2] = "NSFW";
+})(CatalogRating || (exports.CatalogRating = CatalogRating = {}));
+
+},{}],56:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Authentication"), exports);
+__exportStar(require("./RunnerInfo"), exports);
+__exportStar(require("./PagedResult"), exports);
+__exportStar(require("./ContextProvider"), exports);
+
+},{"./Authentication":52,"./ContextProvider":53,"./PagedResult":54,"./RunnerInfo":55}],57:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],58:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FilterType = void 0;
+var FilterType;
+(function (FilterType) {
+    /**
+     * This Represents the filter as a toggle switch, the value returned in the directory request will be a `boolean`
+     */
+    FilterType[FilterType["TOGGLE"] = 0] = "TOGGLE";
+    /**
+     * This represents the filter as a picker, the value returned will be the `key` of the selected option as a `string`
+     */
+    FilterType[FilterType["SELECT"] = 1] = "SELECT";
+    /**
+     * This Represents the filter as a multi-picker, the value returned will the the keys of the selected options as an array of strings
+     */
+    FilterType[FilterType["MULTISELECT"] = 2] = "MULTISELECT";
+    /**
+     * This Represents the filter as a multi-picker,the value returned will be of type {@link ExcludableMultiSelectProp}
+     */
+    FilterType[FilterType["EXCLUDABLE_MULTISELECT"] = 3] = "EXCLUDABLE_MULTISELECT";
+    /**
+     * This will represent the filter as a textfield, the value returned will be a string
+     */
+    FilterType[FilterType["TEXT"] = 4] = "TEXT";
+    /**
+     * This is a basic filter that will only display the title or subtitle, it will not return any value in the populated `DirectoryRequest`
+     */
+    FilterType[FilterType["INFO"] = 5] = "INFO";
+})(FilterType || (exports.FilterType = FilterType = {}));
+
+},{}],59:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],60:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./DirectoryConfig"), exports);
+__exportStar(require("./DirectoryRequest"), exports);
+__exportStar(require("./DirectoryFilter"), exports);
+
+},{"./DirectoryConfig":57,"./DirectoryFilter":58,"./DirectoryRequest":59}],61:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Generate = void 0;
+__exportStar(require("./core"), exports);
+__exportStar(require("./content"), exports);
+__exportStar(require("./networking"), exports);
+__exportStar(require("./UI"), exports);
+__exportStar(require("./tracker"), exports);
+__exportStar(require("./directory"), exports);
+__exportStar(require("./page"), exports);
+const Generate = (v) => v;
+exports.Generate = Generate;
+
+},{"./UI":36,"./content":51,"./core":56,"./directory":60,"./networking":68,"./page":69,"./tracker":70}],62:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NetworkClientBuilder = void 0;
+/**
+ * NetworkClientBuilder is a builder class used for creating and configuring instances of NetworkClient.
+ * The builder allows you to configure various aspects of the NetworkClient, such as rate limits,
+ * request/response transformers (interceptors), headers, cookies, timeout, status validator, and more.
+ */
+class NetworkClientBuilder {
+    constructor() {
+        // Array of functions that transform requests
+        this.requestTransformers = [];
+        // Array of functions that transform responses
+        this.responseTransformers = [];
+        // Object representing HTTP headers, where each key-value pair represents a header
+        this.headers = {};
+        // Array of cookies
+        this.cookies = [];
+    }
+    /**
+     * Sets the rate limit for the NetworkClient.
+     *
+     * @param requests - The maximum number of requests to make per interval.
+     * @param interval - The length of the rate limiting interval in seconds.
+     * @returns The builder, to allow for method chaining.
+     */
+    setRateLimit(requests, interval) {
+        this.requestsPerSecond = requests / interval;
+        return this;
+    }
+    /**
+     * Adds a request interceptor to the NetworkClient.
+     *
+     * @param transformer - The interceptor to add. This should be a function that takes a request and modifies it in some way.
+     * @returns The builder, to allow for method chaining.
+     */
+    addRequestInterceptor(transformer) {
+        this.requestTransformers.push(transformer);
+        return this;
+    }
+    /**
+     * Adds a response interceptor to the NetworkClient.
+     *
+     * @param transformer - The interceptor to add. This should be a function that takes a response and modifies it in some way.
+     * @returns The builder, to allow for method chaining.
+     */
+    addResponseInterceptor(transformer) {
+        this.responseTransformers.push(transformer);
+        return this;
+    }
+    /**
+     * Sets the authorization token for the NetworkClient.
+     *
+     * @param token - The token to be included in the Authorization header of every request.
+     * @returns The builder, to allow for method chaining.
+     */
+    setAuthorizationToken(token) {
+        return this.addHeader("Authorization", token);
+    }
+    /**
+     * Sets the status validator for the NetworkClient.
+     *
+     * @param validator - A function that takes a status code and returns true if it is considered successful.
+     * @returns The builder, to allow for method chaining.
+     */
+    setStatusValidator(validator) {
+        this.statusValidator = validator;
+        return this;
+    }
+    /**
+     * Sets the timeout for requests made by the NetworkClient.
+     *
+     * @param timeout - The maximum time to wait for a request to complete, in milliseconds.
+     * @returns The builder, to allow for method chaining.
+     */
+    setTimeout(timeout) {
+        this.timeout = timeout;
+        return this;
+    }
+    /**
+     * Sets the maximum number of retries for this request by the NetworkClient.
+     *
+     * @param retries - The maximum number of retries for this request
+     * @returns The builder, to allow for method chaining.
+     */
+    setMaxRetries(retries) {
+        this.maxRetries = retries;
+        return this;
+    }
+    /**
+     * Sets a header for the NetworkClient.
+     *
+     * @param key - The name of the header
+     * @param value - The value of the header
+     * @returns The builder, to allow for method chaining.
+     */
+    addHeader(key, value) {
+        this.headers[key] = value;
+        return this;
+    }
+    /**
+     * Sets a cookie for the NetworkClient.
+     *
+     * @param cookie - The cookie to be included in every request.
+     * @returns The builder, to allow for method chaining.
+     */
+    addCookie(cookie) {
+        this.cookies.push(cookie);
+        return this;
+    }
+    /**
+     * Builds a NetworkClient using the parameters set on the builder.
+     *
+     * @returns A NetworkClient with the configured parameters.
+     */
+    build() {
+        return new NetworkClient(this);
+    }
+}
+exports.NetworkClientBuilder = NetworkClientBuilder;
+
+},{}],63:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],64:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],65:[function(require,module,exports){
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.name = void 0;
+const name = (base, known) => __awaiter(void 0, void 0, void 0, function* () {
+    return Object.assign(Object.assign({}, base), known);
+});
+exports.name = name;
+
+},{}],66:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],67:[function(require,module,exports){
+arguments[4][5][0].apply(exports,arguments)
+},{"dup":5}],68:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+__exportStar(require("./Builder"), exports);
+__exportStar(require("./Client"), exports);
+__exportStar(require("./Request"), exports);
+__exportStar(require("./Response"), exports);
+__exportStar(require("./Transformer"), exports);
+__exportStar(require("./Error"), exports);
+
+},{"./Builder":62,"./Client":63,"./Error":64,"./Request":65,"./Response":66,"./Transformer":67}],69:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SectionStyle = void 0;
+var SectionStyle;
+(function (SectionStyle) {
+    SectionStyle[SectionStyle["DEFAULT"] = 0] = "DEFAULT";
+    SectionStyle[SectionStyle["INFO"] = 1] = "INFO";
+    SectionStyle[SectionStyle["GALLERY"] = 2] = "GALLERY";
+    SectionStyle[SectionStyle["NAVIGATION_LIST"] = 3] = "NAVIGATION_LIST";
+    SectionStyle[SectionStyle["ITEM_LIST"] = 4] = "ITEM_LIST";
+    SectionStyle[SectionStyle["PADDED_LIST"] = 5] = "PADDED_LIST";
+    SectionStyle[SectionStyle["TAG"] = 6] = "TAG";
+    SectionStyle[SectionStyle["STANDARD_GRID"] = 7] = "STANDARD_GRID";
+})(SectionStyle || (exports.SectionStyle = SectionStyle = {}));
+
+},{}],70:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TrackStatus = void 0;
+var TrackStatus;
+(function (TrackStatus) {
+    TrackStatus["READING"] = "READING";
+    TrackStatus["PLANNING"] = "PLANNING";
+    TrackStatus["COMPLETED"] = "COMPLETED";
+    TrackStatus["PAUSED"] = "PAUSED";
+    TrackStatus["DROPPED"] = "DROPPED";
+    TrackStatus["REREADING"] = "REREADING";
+})(TrackStatus || (exports.TrackStatus = TrackStatus = {}));
+
+},{}]},{},[1])(1)
+});
